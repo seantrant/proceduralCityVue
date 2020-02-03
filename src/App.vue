@@ -1,15 +1,24 @@
 <template>
   <div id="app">
-    <div id="nav">
+    <!-- <div id="nav">
       <router-link to="/">Home</router-link> |
-      <router-link to="/about">About</router-link>
-    </div>
-    <router-view/>
+      <router-link to="/start">Start</router-link>
+    </div> -->
+    <router-view />
   </div>
 </template>
 
 <style lang="scss">
+body{
+  margin:0px;
+  padding:0px;
+  background-color: #00003d;
+}
 #app {
+  margin:0px;
+  padding:0px;
+  height:100vh;
+  width:100vw;
   font-family: 'Avenir', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -18,6 +27,7 @@
 }
 #nav {
   padding: 30px;
+  height:70px;
   a {
     font-weight: bold;
     color: #2c3e50;
@@ -25,5 +35,15 @@
       color: #42b983;
     }
   }
+}
+
+.noselect {
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Opera and Firefox */
 }
 </style>
