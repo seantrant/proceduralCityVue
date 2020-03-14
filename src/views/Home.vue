@@ -12,10 +12,7 @@ import * as Three from 'three'
 import appNav from '@/components/nav'
 import appTodo from '@/components/todo'
 import appCamera from '@/components/camera'
-import appSettings from '@/components/settings'
-// import NavState from '@/utils/navState'
-
-// const navState = new NavState()
+import appSettings from '@/components/settings/settings.vue'
 
 export default {
   name: 'Home',
@@ -35,22 +32,23 @@ export default {
       camera_y: 2.5,
       container: null,
       middleMouseDown: false,
-      noOfBuildings: this.$store.getters.getScene.buildings.noOfBuildings
-      // buildings: this.$store.getters.getScene.buildings
+      noOfBuildings: this.$store.getters.getScene.buildings.noOfBuildings,
+      noOfRows: this.$store.getters.getScene.buildings.noOfRows,
+      wireFrame: this.$store.getters.getScene.buildings.wireFrame
     }
   },
   computed: {
     updateScene () {
-      // console.log( 'here: ', this.$store.getters.getScene.buildings.noOfBuildings)
-      // return this.$store.getters.getScene.buildings.noOfBuildings
       return this.$store.getters.getScene.buildings
     }
   },
   watch: {
     updateScene (newCount, oldCount) {
+      console.log(newCount, oldCount)
       this.noOfBuildings = this.$store.getters.getScene.buildings.noOfBuildings
-      // this.noOfBuildings = this.$store.getters.getScene.buildings
-      //
+      this.noOfRows = this.$store.getters.getScene.buildings.noOfRows
+      this.wireFrame = this.$store.getters.getScene.buildings.wireFrame
+
       // reset scene then rebuild - need to clean up
       while(this.scene.children.length > 0){
         this.scene.remove(this.scene.children[0]);
@@ -98,10 +96,18 @@ export default {
       this.camera.position.z = 2;
     },
     createBox: function(l, h, w){
-      let geometry = new Three.BoxBufferGeometry( l, h, w);
-      // console.log('HERE', geometry.faces)
+      const loader = new Three.TextureLoader();
+      let geometry = new Three.BoxGeometry( l, h, w );
+      let material = new Three.MeshBasicMaterial( {map: loader.load('https://image.shutterstock.com/z/stock-photo-seamless-abstract-city-at-night-the-lights-in-the-windows-of-skyscrapers-351240224.jpg'),color: 0xD3D3D3} );
+      let box
       let edges = new Three.EdgesGeometry( geometry );
-      let box = new Three.LineSegments( edges, new Three.LineBasicMaterial( { color: 0xffffff } ) );
+      if(this.wireFrame){
+        box = new Three.LineSegments( edges, new Three.LineBasicMaterial( { color: 0xffffff } ) );
+      }else{
+        box = new Three.Mesh( geometry, material );
+        // this.render()
+      }
+      // box.callback = function() { console.log( box ); }
       return box
     },
     createRandomBoxes: function(amount) {
@@ -125,11 +131,18 @@ export default {
       })
     },
     calcNextPosition(coords){
-      if( coords[2] < 3){
+      console.log('last cords = ', coords)
+      let testRows = Math.round(this.noOfBuildings/this.noOfRows)
+      if( coords[2] < testRows){
         return [coords[0], coords[1], coords[2] + 1]
       }else {
         return [ coords[0] + 1, coords[1], 0]
       }
+      // if( coords[2] < 3){
+      //   return [coords[0], coords[1], coords[2] + 1]
+      // }else {
+      //   return [ coords[0] + 1, coords[1], 0]
+      // }
     },
     loadEventListeners: function(){
       //wheel - handles zoom

@@ -14,7 +14,9 @@ export default new Vuex.Store({
     ],
     scene: {
       buildings: {
-        noOfBuildings: 14
+        noOfBuildings: 20,
+        noOfRows: 5,
+        wireFrame: true
       }
     }
 
@@ -35,11 +37,7 @@ export default new Vuex.Store({
     },
 
     updateSceneBuildings (state, payload) {
-      console.log('before update scene is', state.scene.buildings)
-      console.log('updateScene called with payload', payload)
       state.scene.buildings = payload // problem this is not an observable
-      console.log('after update scene is', state.scene.buildings)
-
     }
   },
   actions: {}

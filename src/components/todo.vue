@@ -100,8 +100,11 @@ aside{
   padding:0 1rem;
   border-bottom: 1px solid white;
   border-left: 1px solid white;
+  border-top: 1px solid white;
   text-align: left;
   color:white;
+  background: black;
+  opacity: 0.8;
 
   p{
     margin-bottom:0px;
