@@ -16,7 +16,7 @@ export default new Vuex.Store({
       buildings: {
         noOfBuildings: 20,
         noOfRows: 5,
-        wireFrame: true
+        isWireFrame: true
       }
     }
 

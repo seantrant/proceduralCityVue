@@ -4,7 +4,7 @@ export default {
     return {
       noOfBuildings: this.$store.getters.getScene.buildings.noOfBuildings,
       noOfRows: this.$store.getters.getScene.buildings.noOfRows,
-      wireFrame: this.$store.getters.getScene.buildings.wireFrame
+      isWireFrame: this.$store.getters.getScene.buildings.isWireFrame
     }
   },
   computed: {
@@ -26,7 +26,7 @@ export default {
         // 'buildings': {
           noOfBuildings: this.noOfBuildings,
           noOfRows: this.noOfRows,
-          wireFrame: this.wireFrame
+          isWireFrame: this.isWireFrame
         // }
       });
     }

@@ -10,7 +10,7 @@
 <script>
 import * as Three from 'three'
 import appNav from '@/components/nav'
-import appTodo from '@/components/todo'
+import appTodo from '@/components/todo/todo.vue'
 import appCamera from '@/components/camera'
 import appSettings from '@/components/settings/settings.vue'
 
@@ -34,7 +34,9 @@ export default {
       middleMouseDown: false,
       noOfBuildings: this.$store.getters.getScene.buildings.noOfBuildings,
       noOfRows: this.$store.getters.getScene.buildings.noOfRows,
-      wireFrame: this.$store.getters.getScene.buildings.wireFrame
+      isWireFrame: this.$store.getters.getScene.buildings.isWireFrame,
+      isOutline: this.$store.getters.getScene.buildings.isOutline,
+      arrayContainingGrids: []
     }
   },
   computed: {
@@ -47,7 +49,8 @@ export default {
       console.log(newCount, oldCount)
       this.noOfBuildings = this.$store.getters.getScene.buildings.noOfBuildings
       this.noOfRows = this.$store.getters.getScene.buildings.noOfRows
-      this.wireFrame = this.$store.getters.getScene.buildings.wireFrame
+      this.isWireFrame = this.$store.getters.getScene.buildings.isWireFrame
+      this.isOutline = this.$store.getters.getScene.buildings.isOutline // not added yet
 
       // reset scene then rebuild - need to clean up
       while(this.scene.children.length > 0){
@@ -55,35 +58,121 @@ export default {
       }
       this.scene = null
       this.scene = new Three.Scene()
-      this.init();
+      this.createAndPlaceFloorMeshInScene();
       this.addArrayOfBoxesToScene()
       this.render()
     }
   },
   mounted() {
-    this.init();
+
     this.setUpRenderer()
+    this.createAndPlaceFloorMeshInScene();
     this.setUpCamera();
-    this.render();
     this.updateFov();
     this.loadEventListeners();
     this.addArrayOfBoxesToScene()
+
+
+    this.arrayContainingGrids = this.createGridArray()
+    this.setGridContents(this.arrayContainingGrids)
+    // console.log('should all be buildings', this.arrayContainingGrids)
+
+
     this.render()
   },
   methods: {
-    init: function() {
-      let geometry = new Three.BoxGeometry(100, 0.1, 100);
-      let material = new Three.MeshBasicMaterial( { color: 0x000002, wireframe: false } );
-      this.mesh = new Three.Mesh(geometry, material); // floor mesh
-      this.mesh.position.set( 1, 0, 1);
-      this.scene.add(this.mesh);
+    createGridArray: function(){
+      let arrayContainingGrids = []
+      let currentRow = 0
+      let currentColumn = 0
+      let gridSize = 8 // must have square root for now
+      let totalGrids = 64
+      let count = 1
+      for(let i = 0; i < totalGrids; i++){
+        let grid = { id: i, coords: { x: currentRow, y: currentColumn }, contents: null}
+        if(count == gridSize-1){
+          count = 1
+        }
+        if(currentRow == gridSize - 1 ){
+          currentRow = 0
+          currentColumn++
+        }else{
+          currentRow++
+        }
+        count++
+        arrayContainingGrids.push(grid)
+      }
+      // console.log(arrayContainingGrids)
+      return arrayContainingGrids
     },
+    setGridContents(arrayOfGrids){
+      return arrayOfGrids.forEach((grid) => {
+        if(this.gridShouldContainBuilding(grid)){
+          grid.contents = 'building'
+        }else{
+          grid.contents = 'road'
+        }
+      })
+    },
+    isOdd(num){
+      return num % 2
+    },
+    gridShouldContainBuilding(grid){
+      if(this.isOdd(grid.coords.x) && this.isOdd(grid.coords.y)){
+        return true
+      }
+    },
+    // isConnectedToARoad(grid){ //TODO worng!!!!!!
+    //   let connectedToARoad
+    //   let x = grid.coords.x
+    //   let y = grid.coords.y
+    //   // check the grid at every side , if any are roads then return true
+    //   // get co or   eg 2 4
+    //   if(this.getGrid( x -1 , y ).contents == 'road'){
+    //     connectedToARoad = true
+    //   }else if(this.getGrid( x+1 , y).contents == 'road'){
+    //     connectedToARoad = true
+    //   }else if(this.getGrid( x, y- 1).contents == 'road'){
+    //     connectedToARoad = true
+    //   }else if(this.getGrid( x, y + 1).contents == 'road'){
+    //     connectedToARoad = true
+    //   }else{
+    //     connectedToARoad = false
+    //   }
+    //
+    //   if(connectedToARoad != null){
+    //       connectedToARoad = connectedToARoad[0]
+    //   }
+    //
+    //   return connectedToARoad
+    // },
+    getGridWithCoords(x, y){
+      return this.arrayContainingGrids.filter((grid) => {
+        return grid.coords.x == x && grid.coords.y == y
+      })
+    },
+
+    // drawGrid(grid){
+    //
+    // },
+    // drawGridContents(grid, whatToPutOnGrid){
+    //
+    // }
+
+
     setUpRenderer:function(){
       this.container = document.getElementById('container');
       this.renderer = new Three.WebGLRenderer({antialias: true});
       this.renderer.setSize(this.container.clientWidth-100, this.container.clientHeight-100);
       this.renderer.setClearColor (0x00003d, 1);
       this.container.appendChild(this.renderer.domElement);
+    },
+    createAndPlaceFloorMeshInScene: function() {
+      let geometry = new Three.BoxGeometry(100, 0.1, 100);
+      let material = new Three.MeshBasicMaterial( { color: 0x000002, wireframe: false } );
+      this.mesh = new Three.Mesh(geometry, material); // floor mesh
+      this.mesh.position.set(1, 0, 1);
+      this.scene.add(this.mesh);
     },
     setUpCamera: function(){
       let fov = 70;
@@ -96,21 +185,15 @@ export default {
       this.camera.position.z = 2;
     },
     createBox: function(l, h, w){
-      const loader = new Three.TextureLoader();
+      // const loader = new Three.TextureLoader();
       let geometry = new Three.BoxGeometry( l, h, w );
-      let material = new Three.MeshBasicMaterial( {map: loader.load('https://image.shutterstock.com/z/stock-photo-seamless-abstract-city-at-night-the-lights-in-the-windows-of-skyscrapers-351240224.jpg'),color: 0xD3D3D3} );
+      let material = new Three.MeshBasicMaterial( { color: 0xD3D3D3, wireframe: true, wireframeLinejoin: 'round' } );
       let box
       let edges = new Three.EdgesGeometry( geometry );
-      if(this.wireFrame){
-        box = new Three.LineSegments( edges, new Three.LineBasicMaterial( { color: 0xffffff } ) );
-      }else{
-        box = new Three.Mesh( geometry, material );
-        // this.render()
-      }
-      // box.callback = function() { console.log( box ); }
+      box = new Three.Mesh( geometry, material );
       return box
     },
-    createRandomBoxes: function(amount) {
+    createArrayOfRandomSizedBoxes: function(amount) {
       let arrayOfBoxes = [];
       for(let i = 0; i < amount; i++){
         let h = Math.random() * 5;
@@ -121,16 +204,16 @@ export default {
       return arrayOfBoxes
     },
     addArrayOfBoxesToScene: function() {
-      let arrayOfBoxes = this.createRandomBoxes(this.noOfBuildings)
+      let arrayOfBoxes = this.createArrayOfRandomSizedBoxes(this.noOfBuildings)
       let lastCoords = [0, 0, 0];
       arrayOfBoxes.forEach((box) => {
         this.scene.add(box);
-        lastCoords = this.calcNextPosition(lastCoords)
+        lastCoords = this.calcNextBoxPositionCoordsGivenLast(lastCoords)
         lastCoords[1] = 0.1 + box.height/2;
         box.position.set(...lastCoords)
       })
     },
-    calcNextPosition(coords){
+    calcNextBoxPositionCoordsGivenLast(coords){
       console.log('last cords = ', coords)
       let testRows = Math.round(this.noOfBuildings/this.noOfRows)
       if( coords[2] < testRows){
@@ -138,11 +221,6 @@ export default {
       }else {
         return [ coords[0] + 1, coords[1], 0]
       }
-      // if( coords[2] < 3){
-      //   return [coords[0], coords[1], coords[2] + 1]
-      // }else {
-      //   return [ coords[0] + 1, coords[1], 0]
-      // }
     },
     loadEventListeners: function(){
       //wheel - handles zoom

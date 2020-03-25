@@ -1,0 +1,58 @@
+
+aside{
+  height:auto;
+  width:200px;
+  position:absolute;
+  top:60px;
+  right:0;
+  padding:0 1rem;
+  border-bottom: 1px solid white;
+  border-left: 1px solid white;
+  border-top: 1px solid white;
+  text-align: left;
+  color:white;
+  background: black;
+  opacity: 0.8;
+
+  p{
+    margin-bottom:0px;
+  }
+
+  ul{
+    padding-left:0;
+    margin:0;
+    color:white;
+    list-style:none;
+    padding-top:1rem;
+
+    li{
+      // color:red;
+    }
+
+    li.checked{
+      text-decoration: line-through;
+    }
+
+  }
+
+  .remove-button{
+    float:right;
+  }
+
+  .addButton{
+    margin:10px 0 16px 0;
+
+    input{
+      width:70%;
+    }
+  }
+}
+
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity .5s;
+}
+
+.fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
+  opacity: 0;
+}
