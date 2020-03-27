@@ -1,10 +1,9 @@
 export default {
-  name: 'Camera',
+  name: 'settings',
   data() {
     return {
-      noOfBuildings: this.$store.getters.getScene.buildings.noOfBuildings,
-      noOfRows: this.$store.getters.getScene.buildings.noOfRows,
-      isWireFrame: this.$store.getters.getScene.buildings.isWireFrame
+      drawOnScene: this.$store.getters.getScene.drawOnScene,
+      grid: this.$store.getters.getScene.grid,
     }
   },
   computed: {
@@ -21,13 +20,12 @@ export default {
   },
   methods:{
     reGenerate: function(){
-      // console.log('hello')
-      this.$store.commit("updateSceneBuildings", {
-        // 'buildings': {
+      this.$store.commit("updateScene", {
           noOfBuildings: this.noOfBuildings,
           noOfRows: this.noOfRows,
-          isWireFrame: this.isWireFrame
-        // }
+          isWireFrame: this.isWireFrame,
+          drawOnScene: this.drawOnScene,
+          grid: this.grid,
       });
     }
   },

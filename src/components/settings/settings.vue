@@ -4,28 +4,37 @@
       <p>Settings</p>
       <ul class="noselect">
         <li>
-          Buildings<input
-            v-model="noOfBuildings"
-            placeholder="Buildings"
-            @keyup.enter="reGenerate()"
+          Grid Size<input
+            v-model="grid.gridSize"
+            placeholder="8"
           >
         </li>
 
+        <hr>
+        Show on Scene
+        <br>
         <li>
-          Rows<input
-            v-model="noOfRows"
-            placeholder="Rows"
-            @keyup.enter="reGenerate()"
-          >
+          Floor
+          <input
+            v-model="drawOnScene.floor"
+            type="checkbox"
+            >
+        </li>
+        <li>
+          Grid Layout
+          <input
+            v-model="drawOnScene.gridLayout"
+            type="checkbox"
+            >
+        </li>
+        <li>
+          Buildings
+          <input
+            v-model="drawOnScene.buildings"
+            type="checkbox"
+            >
         </li>
 
-        <!-- <li>
-          Wire Frame
-          <input
-            v-model="wireFrame"
-            type="checkbox"
-            @change="reGenerate()">
-        </li> -->
 
         <button
           class="generateButton"

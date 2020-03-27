@@ -1,5 +1,3 @@
-// store/index.js
-
 import Vue from "vue";
 import Vuex from "vuex";
 
@@ -13,10 +11,13 @@ export default new Vuex.Store({
       { name: 'settings', open: true }
     ],
     scene: {
-      buildings: {
-        noOfBuildings: 20,
-        noOfRows: 5,
-        isWireFrame: true
+      drawOnScene: {
+        gridLayout: false,
+        buildings: true,
+        floor: true
+      },
+      grid:{
+        gridSize: 8,
       }
     }
 
@@ -36,9 +37,13 @@ export default new Vuex.Store({
       })
     },
 
-    updateSceneBuildings (state, payload) {
-      state.scene.buildings = payload // problem this is not an observable
-    }
+    updateScene (state, payload) {
+      state.scene = payload
+    },
+
+    // updateDrawOnScene (state, payload) {
+    //   state.scene.drawOnScene = payload // problem this is not an observable
+    // }
   },
   actions: {}
 });

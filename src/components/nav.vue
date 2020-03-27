@@ -23,7 +23,6 @@ export default {
   },
   methods:{
     openNav(option){
-      // console.log('options selected', option)
       this.$store.commit("changeNav", option);
       console.log('nav ', this.$store.getters.navState)
     }
