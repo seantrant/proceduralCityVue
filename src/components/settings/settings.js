@@ -21,9 +21,9 @@ export default {
   methods:{
     reGenerate: function(){
       this.$store.commit("updateScene", {
-          noOfBuildings: this.noOfBuildings,
-          noOfRows: this.noOfRows,
-          isWireFrame: this.isWireFrame,
+          // noOfBuildings: this.noOfBuildings,
+          // noOfRows: this.noOfRows,
+          // isWireFrame: this.isWireFrame,
           drawOnScene: this.drawOnScene,
           grid: this.grid,
       });

@@ -1,6 +1,6 @@
 import Vue from 'vue';
 import Router from 'vue-router';
-import Home from './views/Home.vue';
+import Scene from './views/Scene.vue';
 // import Start from './views/Start.vue';
 
 Vue.use(Router);
@@ -11,8 +11,8 @@ export default new Router({
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: Home,
+      name: 'scene',
+      component: Scene,
     },
     // {
     //   path: '/start',
