@@ -14,6 +14,7 @@ import appTodo from '@/components/todo/todo.vue'
 import appCamera from '@/components/camera'
 import appSettings from '@/components/settings/settings.vue'
 import UserInput from '@/utils/userInput.js'
+import GridSetup from '@/utils/gridSetup.js'
 
 export default {
   name: 'Scene',
@@ -36,7 +37,9 @@ export default {
 
       drawOnScene: this.$store.getters.getScene.drawOnScene,
       grid: this.$store.getters.getScene.grid,
-      arrayContainingGrids: []
+      gridArray: [],
+
+      gridSetup: null
     }
   },
   computed: {
@@ -55,65 +58,32 @@ export default {
       this.scene = null
       this.scene = new Three.Scene()
 
-      this.arrayContainingGrids = this.addGridContentsToGrid(this.createGridArray())
-      this.drawSceneWithCurrentSettings(this.arrayContainingGrids)
+      this.gridArray = this.gridSetup.createNewGrid()
+      this.drawScene(this.gridArray)
+
+
     }
   },
   mounted() {
+    this.gridSetup = new GridSetup({store: this.$store})
 
     this.setUpRenderer()
     this.setUpCamera();
     this.updateFov();
 
-    this.arrayContainingGrids = this.addGridContentsToGrid(this.createGridArray())
-    this.drawSceneWithCurrentSettings(this.arrayContainingGrids)
+    this.gridArray = this.gridSetup.createNewGrid()
+    this.drawScene(this.gridArray)
 
     this.setupControls();
   },
   methods: {
-    createGridArray: function(){
-      let arrayContainingGrids = []
-      let currentRow = 0
-      let currentColumn = 0
-      let gridSize = this.grid.gridSize // must have square root for now
-      let totalGrids = gridSize * gridSize
-      let count = 1
-      for(let i = 0; i < totalGrids; i++){
-        let grid = { id: i, coords: { x: currentRow, y: currentColumn }, contents: null} // makde class for grid
-        if(count == gridSize-1){
-          count = 1
-        }
-        if(currentRow == gridSize - 1 ){
-          currentRow = 0
-          currentColumn++
-        }else{
-          currentRow++
-        }
-        count++
-        arrayContainingGrids.push(grid)
-      }
-      return arrayContainingGrids
-    },
 
-    addGridContentsToGrid(arrayOfGrids){
-      return arrayOfGrids.map((grid) => {
-        if(this.gridShouldContainBuilding(grid)){
-          grid.contents = 'building'
-        }else if(this.gridShouldContainJunction(grid)){
-          grid.contents = 'junction'
-        }else{
-          grid.contents = 'road'
-        }
-        return grid
-      })
-    },
-
-    drawSceneWithCurrentSettings(arrayOfGrids){
+    drawScene(arrayOfGrids){
       if(this.drawOnScene.buildings){
-        this.drawGridBuildings(this.arrayContainingGrids)
+        this.drawGridBuildings(this.gridArray)
       }
       if(this.drawOnScene.gridLayout){
-        this.drawGridLayout(this.arrayContainingGrids)
+        this.drawGridLayout(this.gridArray)
       }
       if(this.drawOnScene.floor){
         this.createAndDrawFloor();
@@ -152,11 +122,11 @@ export default {
       })
     },
 
-    getGridWithCoords(x, y){
-      return this.arrayContainingGrids.filter((grid) => {
-        return grid.coords.x == x && grid.coords.y == y
-      })
-    },
+    // getGridWithCoords(x, y){
+    //   return this.gridArray.filter((grid) => {
+    //     return grid.coords.x == x && grid.coords.y == y
+    //   })
+    // },
 
     setUpRenderer:function(){
       this.container = document.getElementById('container');
@@ -182,6 +152,20 @@ export default {
       this.camera.lookAt(new Three.Vector3(0,0,9)); // Set look at coordinate like this
       this.camera.position.z = 2;
     },
+    createBoxEdges: function (l, h, w){ //shape class
+      let geometry = new Three.BoxGeometry( l, h, w );
+      let edge = new Three.EdgesGeometry(geometry)
+      let boxEdges = new Three.LineSegments(edge,new Three.LineBasicMaterial({color:0x00ff00}))
+      return boxEdges
+    },
+    createBox: function(l, h, w, color = 0xD3D3D3, wireframe = true){ // shape class
+      let geometry = new Three.BoxGeometry( l, h, w );
+      let material = new Three.MeshBasicMaterial( { color: color, wireframe: wireframe } );
+      let edges = new Three.EdgesGeometry( geometry );
+      let box = new Three.Mesh( geometry, material );
+      return box
+    },
+
     setupControls(){
       let userInput = new UserInput({window, camera: this.camera})
       userInput.loadEventListeners((res) => {
@@ -190,33 +174,6 @@ export default {
           this.render()
         }
       });
-    },
-    createBoxEdges: function (l, h, w){
-      let geometry = new Three.BoxGeometry( l, h, w );
-      let edge = new Three.EdgesGeometry(geometry)
-      let boxEdges = new Three.LineSegments(edge,new Three.LineBasicMaterial({color:0x00ff00}))
-      return boxEdges
-    },
-    createBox: function(l, h, w, color = 0xD3D3D3, wireframe = true){
-      let geometry = new Three.BoxGeometry( l, h, w );
-      let material = new Three.MeshBasicMaterial( { color: color, wireframe: wireframe } );
-      let edges = new Three.EdgesGeometry( geometry );
-      let box = new Three.Mesh( geometry, material );
-      return box
-    },
-
-    isOdd(num){
-      return num % 2
-    },
-    gridShouldContainBuilding(grid){
-      if(this.isOdd(grid.coords.x) && this.isOdd(grid.coords.y)){
-        return true
-      }
-    },
-    gridShouldContainJunction(grid){
-      if(!this.isOdd(grid.coords.x) && !this.isOdd(grid.coords.y)){
-        return true
-      }
     },
 
     updateFov: function(delta){
@@ -228,9 +185,11 @@ export default {
       this.camera.updateProjectionMatrix()
       this.render();
     },
+
     render: function() {
       this.renderer.render(this.scene, this.camera);
     },
+    
   },
 };
 </script>

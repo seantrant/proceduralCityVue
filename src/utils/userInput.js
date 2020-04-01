@@ -1,4 +1,6 @@
-
+/**
+ * Contains functionaliy concerning user inputs. To be broken up further once more inputs are created, keyboard clicks etc..
+ */
 export class UserInput {
 
   constructor(args){
