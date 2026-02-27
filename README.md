@@ -27,3 +27,6 @@ npm run lint
 
 ### Customize configuration
 See [Configuration Reference](https://cli.vuejs.org/config/).
+
+## Copilot & prompts
+See `copilot-instructions.md` and `docs/copilot-prompts.md` for Copilot usage, prompts, and the change-explanation template.

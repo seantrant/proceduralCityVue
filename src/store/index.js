@@ -37,13 +37,24 @@ export default new Vuex.Store({
       })
     },
 
+    // Merge partial updates into the existing scene object so incremental
+    // changes are reactive and don't trigger a full rebuild unless desired.
     updateScene (state, payload) {
-      state.scene = payload
+      state.scene = Object.assign({}, state.scene, payload)
     },
 
-    // updateDrawOnScene (state, payload) {
-    //   state.scene.drawOnScene = payload // problem this is not an observable
-    // }
+    updateDrawOnScene (state, payload) {
+      state.scene.drawOnScene = Object.assign({}, state.scene.drawOnScene, payload)
+    },
+
+    updateGrid (state, payload) {
+      state.scene.grid = Object.assign({}, state.scene.grid, payload)
+    },
+
+    // Full replace used by the Generate action to trigger a complete rebuild
+    replaceScene (state, payload) {
+      state.scene = payload
+    }
   },
   actions: {}
 });

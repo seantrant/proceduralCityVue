@@ -3,7 +3,12 @@
     <aside v-if="openWindow">
       <p>Camera</p>
       <ul class="noselect">
-        <li />
+        <li>
+          <button @click="requestPointerLock">Enable FPS Controls (click scene)</button>
+        </li>
+        <li>
+          <small>Pointer lock: <strong>{{ pointerLocked ? 'Locked' : 'Unlocked' }}</strong></small>
+        </li>
       </ul>
     </aside>
   </transition>
@@ -27,8 +32,17 @@ export default {
     }
   },
   mounted(){
+    this.pointerLocked = document.pointerLockElement !== null
+    document.addEventListener('pointerlockchange', this._onPointerLockChange)
   },
   methods:{
+    requestPointerLock(){
+      // ask the scene to request pointer lock on the canvas
+      document.dispatchEvent(new CustomEvent('request-pointer-lock'))
+    },
+    _onPointerLockChange(){
+      this.pointerLocked = document.pointerLockElement !== null
+    }
   }
 };
 </script>

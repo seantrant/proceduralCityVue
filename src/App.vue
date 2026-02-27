@@ -8,7 +8,8 @@
 body{
   margin:0px;
   padding:0px;
-  background-color: #00003d;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #001f3f 0%, #000015 100%);
 }
 #app {
   margin:0px;

@@ -4,6 +4,12 @@
     <appTodo />
     <appCamera />
     <appSettings />
+    <div v-if="pointerLocked" class="fps-hint">
+      <div class="fps-hint-inner">
+        <div>FPS controls active — WASD to move, mouse to look</div>
+        <div class="muted">Press Esc to release pointer</div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -40,6 +46,11 @@ export default {
       gridArray: [],
 
       gridSetup: null
+      ,
+      input: null,
+      _lastTime: null,
+      lastTime: null,
+      pointerLocked: false,
     }
   },
   computed: {
@@ -49,7 +60,6 @@ export default {
   },
   watch: {
     updateScene (newCount, oldCount) {
-      console.log(newCount, oldCount)
 
       // reset scene then rebuild - need to clean up
       // while(this.scene.children.length > 0){
@@ -63,6 +73,21 @@ export default {
 
 
     }
+    ,
+    // granular watcher for incremental draw setting changes
+    '$store.state.scene.drawOnScene': {
+      handler(newVal, oldVal) {
+        this.handleDrawOnSceneChange(newVal, oldVal)
+      },
+      deep: true
+    },
+    // granular watcher for grid config changes
+    '$store.state.scene.grid': {
+      handler(newVal, oldVal) {
+        this.handleGridChange(newVal, oldVal)
+      },
+      deep: true
+    }
   },
   mounted() {
     this.gridSetup = new GridSetup({store: this.$store})
@@ -75,15 +100,50 @@ export default {
     this.drawScene(this.gridArray)
 
     this.setupControls();
+
+    // listen for UI requests to request pointer lock
+    this._onRequestPointerLock = () => {
+      if(this.renderer && this.renderer.domElement && this.renderer.domElement.requestPointerLock){
+        try{ this.renderer.domElement.requestPointerLock() }catch(e){ void e }
+      }
+    }
+    document.addEventListener('request-pointer-lock', this._onRequestPointerLock)
+
+    // listen for settings updates
+    this._onUpdateInputSettings = (e) => {
+      if(this.input && e && e.detail){
+        const s = e.detail
+        if(typeof s.mouseSensitivity === 'number') this.input.mouseSensitivity = s.mouseSensitivity
+        if(typeof s.moveSpeed === 'number') this.input.moveSpeed = s.moveSpeed
+        if(typeof s.acceleration === 'number') this.input.acceleration = s.acceleration
+        if(typeof s.friction === 'number') this.input.friction = s.friction
+      }
+    }
+    document.addEventListener('update-input-settings', this._onUpdateInputSettings)
+
+    // show on-screen hint when pointer lock is active
+    this._onPointerLockChangeForHint = () => {
+      this.pointerLocked = (document.pointerLockElement === (this.renderer && this.renderer.domElement))
+    }
+    document.addEventListener('pointerlockchange', this._onPointerLockChangeForHint)
+
+    this.startAnimation();
+  },
+
+  beforeDestroy(){
+    document.removeEventListener('request-pointer-lock', this._onRequestPointerLock)
+    document.removeEventListener('update-input-settings', this._onUpdateInputSettings)
+    document.removeEventListener('pointerlockchange', this._onPointerLockChangeForHint)
+    if(this.input && typeof this.input.disconnect === 'function') this.input.disconnect()
   },
   methods: {
 
     drawScene(arrayOfGrids){
       if(this.drawOnScene.buildings){
-        this.drawGridBuildings(this.gridArray)
+        this.drawGridBuildings(arrayOfGrids)
       }
       if(this.drawOnScene.gridLayout){
-        this.drawGridLayout(this.gridArray)
+        this.drawGridLayout(arrayOfGrids)
       }
       if(this.drawOnScene.floor){
         this.createAndDrawFloor();
@@ -91,7 +151,48 @@ export default {
       this.render()
     },
 
+    handleDrawOnSceneChange(newVal) {
+      if(!this.scene) return
+      const floorGroup = this.scene.getObjectByName && this.scene.getObjectByName('floorGroup')
+      if(floorGroup) floorGroup.visible = !!(newVal && newVal.floor)
+
+      const gridGroup = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
+      if(gridGroup) gridGroup.visible = !!(newVal && newVal.gridLayout)
+
+      const buildingGroup = this.scene.getObjectByName && this.scene.getObjectByName('buildingGroup')
+      if(buildingGroup) buildingGroup.visible = !!(newVal && newVal.buildings)
+    },
+
+    handleGridChange(newGrid, oldGrid) {
+      if(!oldGrid) return
+      // structural change like gridSize -> recreate only grid group
+      if(newGrid.gridSize !== oldGrid.gridSize){
+        const existing = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
+        if(existing) this.scene.remove(existing)
+        // create a new grid group from gridSetup if available
+        if(this.gridSetup && typeof this.gridSetup.createGridGroup === 'function'){
+          const gridGroup = this.gridSetup.createGridGroup(newGrid)
+          gridGroup.name = 'gridGroup'
+          this.scene.add(gridGroup)
+        } else {
+          // fallback: recreate full grid layout meshes
+          this.gridArray = this.gridSetup.createNewGrid()
+          this.drawGridLayout(this.gridArray)
+        }
+      }
+      // non structural changes (e.g. flags) can be handled via handleDrawOnSceneChange
+    },
+
     drawGridLayout(arrayOfGrids){
+      // create or replace a named group for grid layout so we can toggle it
+      let gridGroup = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
+      if(gridGroup) {
+        // clear existing
+        while(gridGroup.children.length) gridGroup.remove(gridGroup.children[0])
+      } else {
+        gridGroup = new Three.Group()
+        gridGroup.name = 'gridGroup'
+      }
       let box
       let h = 0.01
       arrayOfGrids.forEach((grid) => {
@@ -103,10 +204,20 @@ export default {
           box = this.createBox(1, h, 1, 0x6a0000, false)
         }
         box.position.set(grid.coords.x, 0.1, grid.coords.y)
-        this.scene.add(box);
+        gridGroup.add(box);
       })
+      // ensure group is added to scene
+      if(!this.scene.getObjectByName('gridGroup')) this.scene.add(gridGroup)
     },
     drawGridBuildings(arrayOfGrids){
+      // create or replace a named group for buildings so we can toggle it
+      let buildingGroup = this.scene.getObjectByName && this.scene.getObjectByName('buildingGroup')
+      if(buildingGroup) {
+        while(buildingGroup.children.length) buildingGroup.remove(buildingGroup.children[0])
+      } else {
+        buildingGroup = new Three.Group()
+        buildingGroup.name = 'buildingGroup'
+      }
       let box
       let boxEdges
       arrayOfGrids.forEach((grid) => {
@@ -116,10 +227,11 @@ export default {
           boxEdges = this.createBoxEdges(1, h, 1)
           box.position.set(grid.coords.x, 0.1 + h/2, grid.coords.y)
           boxEdges.position.set(grid.coords.x, 0.1 + h/2, grid.coords.y)
+          buildingGroup.add(boxEdges);
+          buildingGroup.add(box);
         }
-        this.scene.add(boxEdges);
-        this.scene.add(box);
       })
+      if(!this.scene.getObjectByName('buildingGroup')) this.scene.add(buildingGroup)
     },
 
     // getGridWithCoords(x, y){
@@ -130,17 +242,26 @@ export default {
 
     setUpRenderer:function(){
       this.container = document.getElementById('container');
-      this.renderer = new Three.WebGLRenderer({antialias: true});
+      this.renderer = new Three.WebGLRenderer({antialias: true, alpha: true});
       this.renderer.setSize(this.container.clientWidth-100, this.container.clientHeight-100);
-      this.renderer.setClearColor (0x00003d, 1);
+      this.renderer.setClearColor (0x000000, 0);
       this.container.appendChild(this.renderer.domElement);
     },
     createAndDrawFloor: function() {
+      // create or replace a named floor group
+      let floorGroup = this.scene.getObjectByName && this.scene.getObjectByName('floorGroup')
+      if(floorGroup){
+        while(floorGroup.children.length) floorGroup.remove(floorGroup.children[0])
+      } else {
+        floorGroup = new Three.Group()
+        floorGroup.name = 'floorGroup'
+      }
       let geometry = new Three.BoxGeometry(100, 0.1, 100);
       let material = new Three.MeshBasicMaterial( { color: 0x000002, wireframe: false } );
-      this.mesh = new Three.Mesh(geometry, material); // floor mesh
-      this.mesh.position.set(1, 0, 1);
-      this.scene.add(this.mesh);
+      const floorMesh = new Three.Mesh(geometry, material); // floor mesh
+      floorMesh.position.set(1, 0, 1);
+      floorGroup.add(floorMesh)
+      if(!this.scene.getObjectByName('floorGroup')) this.scene.add(floorGroup)
     },
     setUpCamera: function(){
       let fov = 70;
@@ -161,19 +282,17 @@ export default {
     createBox: function(l, h, w, color = 0xD3D3D3, wireframe = true){ // shape class
       let geometry = new Three.BoxGeometry( l, h, w );
       let material = new Three.MeshBasicMaterial( { color: color, wireframe: wireframe } );
-      let edges = new Three.EdgesGeometry( geometry );
       let box = new Three.Mesh( geometry, material );
       return box
     },
 
     setupControls(){
-      let userInput = new UserInput({window, camera: this.camera})
-      userInput.loadEventListeners((res) => {
-        if(res){
-          this.camera = res
-          this.render()
-        }
-      });
+      // create input manager and connect it to the renderer DOM element
+      this.input = new UserInput({ camera: this.camera })
+      // connect to renderer.domElement so pointer lock can be requested on click
+      if(this.renderer && this.renderer.domElement){
+        this.input.connect(this.renderer.domElement)
+      }
     },
 
     updateFov: function(delta){
@@ -189,6 +308,23 @@ export default {
     render: function() {
       this.renderer.render(this.scene, this.camera);
     },
+
+    startAnimation(){
+      this.lastTime = performance.now()
+      this._animate = this._animate.bind(this)
+      requestAnimationFrame(this._animate)
+    },
+
+    _animate(now){
+      const deltaMs = now - (this.lastTime || now)
+      const delta = Math.min(0.05, deltaMs / 1000) // clamp delta to avoid big jumps
+      this.lastTime = now
+      if(this.input && typeof this.input.update === 'function'){
+        this.input.update(delta)
+      }
+      this.renderer.render(this.scene, this.camera)
+      requestAnimationFrame(this._animate)
+    },
     
   },
 };
@@ -202,4 +338,22 @@ export default {
     margin:0px;
     padding:0px;
   }
+
+  .fps-hint{
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 20px;
+    z-index: 9999;
+    pointer-events: none;
+  }
+  .fps-hint-inner{
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 14px;
+  }
+  .fps-hint .muted{opacity:0.8;font-size:12px;margin-top:4px}
 </style>
