@@ -60,7 +60,7 @@ export default class InputManager {
 
   _onClick(){
     if(!this.domElement) return
-    try{ this.domElement.requestPointerLock() }catch(e){}
+    try { this.domElement.requestPointerLock(); } catch (e) { /* ignore */ }
   }
 
   _onPointerLockChange(){

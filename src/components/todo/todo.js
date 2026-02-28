@@ -14,8 +14,8 @@ export default {
     }
   },
   watch: {
-    openWindow (newCount, oldCount) {
-      console.log(`new be ${newCount} old be ${oldCount}`)
+    openWindow () {
+      // watcher intentionally left empty to avoid logging in production
     }
   },
   mounted(){

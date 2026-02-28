@@ -15,6 +15,7 @@
 
 <script>
 import * as Three from 'three'
+import { markRaw } from 'vue'
 import appNav from '@/components/nav'
 import appTodo from '@/components/todo/todo.vue'
 import appCamera from '@/components/camera'
@@ -35,7 +36,7 @@ export default {
       camera: null,
       renderer: null,
       mesh: null,
-      scene: new Three.Scene(),
+      scene: markRaw(new Three.Scene()),
       camera_x: 10,
       camera_y: 8,
       container: null,
@@ -45,10 +46,8 @@ export default {
       grid: this.$store.getters.getScene.grid,
       gridArray: [],
 
-      gridSetup: null
-      ,
+      gridSetup: null,
       input: null,
-      _lastTime: null,
       lastTime: null,
       pointerLocked: false,
     }
@@ -59,14 +58,12 @@ export default {
     }
   },
   watch: {
-    updateScene (newCount, oldCount) {
+    updateScene () {
 
-      // reset scene then rebuild - need to clean up
-      // while(this.scene.children.length > 0){
-      //   this.scene.remove(this.scene.children[0]);
-      // }
+      // reset scene then rebuild - clean up previous resources first
+      if(this.scene) this.disposeObject(this.scene)
       this.scene = null
-      this.scene = new Three.Scene()
+      this.scene = markRaw(new Three.Scene())
 
       this.gridArray = this.gridSetup.createNewGrid()
       this.drawScene(this.gridArray)
@@ -130,11 +127,18 @@ export default {
     this.startAnimation();
   },
 
-  beforeDestroy(){
+  beforeUnmount(){
     document.removeEventListener('request-pointer-lock', this._onRequestPointerLock)
     document.removeEventListener('update-input-settings', this._onUpdateInputSettings)
     document.removeEventListener('pointerlockchange', this._onPointerLockChangeForHint)
     if(this.input && typeof this.input.disconnect === 'function') this.input.disconnect()
+    // stop animation loop
+    if(this._rafId) cancelAnimationFrame(this._rafId)
+    // dispose renderer and scene resources
+    if(this.renderer && typeof this.renderer.dispose === 'function'){
+      try{ this.renderer.dispose(); if(this.renderer.forceContextLoss) this.renderer.forceContextLoss() }catch(e){ void e }
+    }
+    if(this.scene) this.disposeObject(this.scene)
   },
   methods: {
 
@@ -148,7 +152,7 @@ export default {
       if(this.drawOnScene.floor){
         this.createAndDrawFloor();
       }
-      this.render()
+      this.renderScene()
     },
 
     handleDrawOnSceneChange(newVal) {
@@ -187,10 +191,14 @@ export default {
       // create or replace a named group for grid layout so we can toggle it
       let gridGroup = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
       if(gridGroup) {
-        // clear existing
-        while(gridGroup.children.length) gridGroup.remove(gridGroup.children[0])
+        // clear existing and dispose resources
+        while(gridGroup.children.length){
+          const child = gridGroup.children[0]
+          this.disposeObject(child)
+          gridGroup.remove(child)
+        }
       } else {
-        gridGroup = new Three.Group()
+        gridGroup = markRaw(new Three.Group())
         gridGroup.name = 'gridGroup'
       }
       let box
@@ -213,9 +221,13 @@ export default {
       // create or replace a named group for buildings so we can toggle it
       let buildingGroup = this.scene.getObjectByName && this.scene.getObjectByName('buildingGroup')
       if(buildingGroup) {
-        while(buildingGroup.children.length) buildingGroup.remove(buildingGroup.children[0])
+        while(buildingGroup.children.length){
+          const child = buildingGroup.children[0]
+          this.disposeObject(child)
+          buildingGroup.remove(child)
+        }
       } else {
-        buildingGroup = new Three.Group()
+        buildingGroup = markRaw(new Three.Group())
         buildingGroup.name = 'buildingGroup'
       }
       let box
@@ -242,7 +254,7 @@ export default {
 
     setUpRenderer:function(){
       this.container = document.getElementById('container');
-      this.renderer = new Three.WebGLRenderer({antialias: true, alpha: true});
+      this.renderer = markRaw(new Three.WebGLRenderer({antialias: true, alpha: true}));
       this.renderer.setSize(this.container.clientWidth-100, this.container.clientHeight-100);
       this.renderer.setClearColor (0x000000, 0);
       this.container.appendChild(this.renderer.domElement);
@@ -251,9 +263,13 @@ export default {
       // create or replace a named floor group
       let floorGroup = this.scene.getObjectByName && this.scene.getObjectByName('floorGroup')
       if(floorGroup){
-        while(floorGroup.children.length) floorGroup.remove(floorGroup.children[0])
+        while(floorGroup.children.length){
+          const child = floorGroup.children[0]
+          this.disposeObject(child)
+          floorGroup.remove(child)
+        }
       } else {
-        floorGroup = new Three.Group()
+        floorGroup = markRaw(new Three.Group())
         floorGroup.name = 'floorGroup'
       }
       let geometry = new Three.BoxGeometry(100, 0.1, 100);
@@ -268,7 +284,7 @@ export default {
       let aspect = this.container.clientWidth/this.container.clientHeight;  // the canvas default
       let near = 0.1;
       let far = 500000;
-      this.camera = new Three.PerspectiveCamera(fov, aspect, near, far);
+      this.camera = markRaw(new Three.PerspectiveCamera(fov, aspect, near, far));
       this.camera.position.set(this.camera_x, 4.5, this.camera_y); // Set position like this
       this.camera.lookAt(new Three.Vector3(0,0,9)); // Set look at coordinate like this
       this.camera.position.z = 2;
@@ -302,17 +318,17 @@ export default {
         this.camera.fov--;
       }
       this.camera.updateProjectionMatrix()
-      this.render();
+      this.renderScene();
     },
 
-    render: function() {
+    renderScene: function() {
       this.renderer.render(this.scene, this.camera);
     },
 
     startAnimation(){
       this.lastTime = performance.now()
       this._animate = this._animate.bind(this)
-      requestAnimationFrame(this._animate)
+      this._rafId = requestAnimationFrame(this._animate)
     },
 
     _animate(now){
@@ -323,7 +339,26 @@ export default {
         this.input.update(delta)
       }
       this.renderer.render(this.scene, this.camera)
-      requestAnimationFrame(this._animate)
+      this._rafId = requestAnimationFrame(this._animate)
+    },
+    // traverse an Object3D and dispose geometries, materials, and textures
+    disposeObject(obj){
+      if(!obj || typeof obj.traverse !== 'function') return
+      try{
+        obj.traverse((child) => {
+          if(child.geometry){ try{ child.geometry.dispose() }catch(e){ void e } }
+          if(child.material){
+            try{
+              if(Array.isArray(child.material)){
+                child.material.forEach(m => { try{ if(m && m.dispose) m.dispose() }catch(e){ void e } })
+              } else {
+                if(child.material.dispose) child.material.dispose()
+              }
+            }catch(e){ void e }
+          }
+          if(child.texture && child.texture.dispose){ try{ child.texture.dispose() }catch(e){ void e } }
+        })
+      }catch(e){ void e }
     },
     
   },

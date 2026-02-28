@@ -19,6 +19,7 @@ export default {
   name: 'Camera',
   data() {
     return {
+      pointerLocked: false
     }
   },
   computed: {
@@ -27,13 +28,16 @@ export default {
     }
   },
   watch: {
-    openWindow (newCount, oldCount) {
-      console.log(`new be ${newCount} old be ${oldCount}`)
+    openWindow () {
+      // no-op watcher (avoid logging in production)
     }
   },
   mounted(){
     this.pointerLocked = document.pointerLockElement !== null
     document.addEventListener('pointerlockchange', this._onPointerLockChange)
+  },
+  beforeUnmount(){
+    document.removeEventListener('pointerlockchange', this._onPointerLockChange)
   },
   methods:{
     requestPointerLock(){
