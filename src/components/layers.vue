@@ -37,7 +37,7 @@
 export default {
   name: 'Layers',
   data() {
-    const scene = this.$store.getters.getScene || {}
+    const scene = this.$store.state.sceneView || {}
     return {
       showBuildings: !!(scene.drawOnScene && scene.drawOnScene.buildings),
       showGrid: !!(scene.drawOnScene && scene.drawOnScene.gridLayout),
@@ -46,11 +46,11 @@ export default {
   },
   computed: {
     openWindow () {
-      const item = (this.$store.getters.navState || []).find(n => n.name === 'layers')
+      const item = (this.$store.state.nav.items || []).find(n => n.name === 'layers')
       return !!(item && item.open)
     },
     panelIndex () {
-      const openPanels = (this.$store.getters.navState || []).filter(n => n.open)
+      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open)
       return openPanels.findIndex(n => n.name === 'layers')
     },
     panelStyle () {
@@ -60,9 +60,9 @@ export default {
     }
   },
   watch: {
-    showBuildings(newVal) { this.$store.commit('updateDrawOnScene', { buildings: !!newVal }) },
-    showGrid(newVal) { this.$store.commit('updateDrawOnScene', { gridLayout: !!newVal }) },
-    showFloor(newVal) { this.$store.commit('updateDrawOnScene', { floor: !!newVal }) }
+    showBuildings(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { buildings: !!newVal }) },
+    showGrid(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { gridLayout: !!newVal }) },
+    showFloor(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { floor: !!newVal }) }
   }
 }
 </script>

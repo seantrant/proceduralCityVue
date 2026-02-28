@@ -96,6 +96,38 @@
             Apply
           </button>
         </li>
+        <hr>
+        <li class="panel-section">
+          Simulation
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Running</span>
+          <input
+            v-model="simulationRunning"
+            type="checkbox"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Speed</span>
+          <input
+            v-model.number="simulationSpeed"
+            step="0.25"
+            min="0.25"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Tick</span>
+          <strong class="sim-value">{{ simulationTick }}</strong>
+        </li>
+        <li class="panel-row panel-row-action">
+          <span class="panel-key">Simulation</span>
+          <button
+            class="generateButton"
+            @click="resetSimulation()"
+          >
+            Reset
+          </button>
+        </li>
       </ul>
     </aside>
   </transition>

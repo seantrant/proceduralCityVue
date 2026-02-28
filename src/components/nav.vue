@@ -26,7 +26,7 @@ export default {
   },
   methods:{
     openNav(option){
-      this.$store.commit("changeNav", option);
+      this.$store.commit("nav/changeNav", option);
     }
   }
 };

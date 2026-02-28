@@ -37,6 +37,16 @@ import appSettings from '@/components/settings/settings.vue'
 import miniMap from '@/components/miniMap.vue'
 import UserInput from '@/utils/userInput.js'
 import GridSetup from '@/utils/gridSetup.js'
+import {
+  rebuildBuildings,
+  rebuildFloor,
+  rebuildGridLayout,
+  setGroupVisibility,
+} from '@/composables/useSceneGroups'
+import {
+  createCameraAnimation,
+  stepCameraAnimation,
+} from '@/composables/useCameraAnimation'
 
 export default {
   name: 'Scene',
@@ -66,52 +76,55 @@ export default {
       orbitAltitude: 12,
       orbitSpeed: 0.05,
 
-      drawOnScene: this.$store.getters.getScene.drawOnScene,
-      grid: this.$store.getters.getScene.grid,
+      drawOnScene: Object.assign({}, this.$store.state.sceneView.drawOnScene || {}),
+      grid: Object.assign({}, this.$store.state.sceneView.grid || {}),
       gridArray: [],
 
       gridSetup: null,
       input: null,
       cameraAnimation: null,
       lastTime: null,
+      simulationAccumulator: 0,
+      simulationStepMs: 250,
       pointerLocked: false,
-    }
-  },
-  computed: {
-    updateScene () {
-      return this.$store.getters.getScene
+      tmpDirVec: markRaw(new Three.Vector3()),
+      tmpLookVec: markRaw(new Three.Vector3()),
     }
   },
   watch: {
-    updateScene () {
-
+    '$store.state.sceneVersion': {
+      handler() {
       // reset scene then rebuild - clean up previous resources first
       if(this.scene) this.disposeObject(this.scene)
       this.scene = null
       this.scene = markRaw(new Three.Scene())
 
+      const storeScene = this.$store.state.sceneView || {}
+      this.drawOnScene = Object.assign({}, storeScene.drawOnScene || {})
+      this.grid = Object.assign({}, storeScene.grid || {})
+
       this.gridArray = this.gridSetup.createNewGrid()
       this.drawScene(this.gridArray)
-
-
-    }
-    ,
+      }
+    },
     // granular watcher for incremental draw setting changes
-    '$store.state.scene.drawOnScene': {
-      handler(newVal, oldVal) {
-        this.handleDrawOnSceneChange(newVal, oldVal)
+    '$store.state.sceneView.drawOnScene': {
+      handler(newVal) {
+        this.drawOnScene = Object.assign({}, newVal || {})
+        this.handleDrawOnSceneChange(newVal)
       },
       deep: true
     },
     // granular watcher for grid config changes
-    '$store.state.scene.grid': {
+    '$store.state.sceneView.grid': {
       handler(newVal, oldVal) {
+        this.grid = Object.assign({}, newVal || {})
         this.handleGridChange(newVal, oldVal)
       },
       deep: true
     }
     ,
-    '$store.state.scene.camera': {
+    '$store.state.sceneView.camera': {
       handler(newVal){
         if(newVal && newVal.helicopter){
           this.startOrbit()
@@ -124,6 +137,13 @@ export default {
   },
   mounted() {
     this.gridSetup = new GridSetup({store: this.$store})
+
+    const storeScene = this.$store.state.sceneView || {}
+    this.drawOnScene = Object.assign({}, storeScene.drawOnScene || {})
+    this.grid = Object.assign({}, storeScene.grid || {})
+
+    this.$store.commit('simulation/reset')
+    this.$store.commit('simulation/setRunning', true)
 
     this.setUpRenderer()
     this.setUpCamera();
@@ -160,13 +180,25 @@ export default {
     }
     document.addEventListener('pointerlockchange', this._onPointerLockChangeForHint)
 
+    this._onResize = () => {
+      if(!this.renderer || !this.camera || !this.container) return
+      const width = Math.max(1, this.container.clientWidth - 100)
+      const height = Math.max(1, this.container.clientHeight - 100)
+      this.renderer.setSize(width, height)
+      this.camera.aspect = width / height
+      this.camera.updateProjectionMatrix()
+    }
+    window.addEventListener('resize', this._onResize)
+
     this.startAnimation();
   },
 
   beforeUnmount(){
+    this.$store.commit('simulation/setRunning', false)
     document.removeEventListener('request-pointer-lock', this._onRequestPointerLock)
     document.removeEventListener('update-input-settings', this._onUpdateInputSettings)
     document.removeEventListener('pointerlockchange', this._onPointerLockChangeForHint)
+    window.removeEventListener('resize', this._onResize)
     if(this.input && typeof this.input.disconnect === 'function') this.input.disconnect()
     // stop animation loop
     if(this._rafId) cancelAnimationFrame(this._rafId)
@@ -192,107 +224,50 @@ export default {
     },
 
     handleDrawOnSceneChange(newVal) {
-      if(!this.scene) return
-      const floorGroup = this.scene.getObjectByName && this.scene.getObjectByName('floorGroup')
-      if(floorGroup) floorGroup.visible = !!(newVal && newVal.floor)
-
-      const gridGroup = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
-      if(gridGroup) gridGroup.visible = !!(newVal && newVal.gridLayout)
-
-      const buildingGroup = this.scene.getObjectByName && this.scene.getObjectByName('buildingGroup')
-      if(buildingGroup) buildingGroup.visible = !!(newVal && newVal.buildings)
+      setGroupVisibility(this.scene, newVal)
     },
 
     handleGridChange(newGrid, oldGrid) {
-      if(!oldGrid) return
+      if(!oldGrid || !newGrid || !this.scene) return
       // structural change like gridSize -> recreate only grid group
       if(newGrid.gridSize !== oldGrid.gridSize){
-        const existing = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
-        if(existing) this.scene.remove(existing)
-        // create a new grid group from gridSetup if available
-        if(this.gridSetup && typeof this.gridSetup.createGridGroup === 'function'){
-          const gridGroup = this.gridSetup.createGridGroup(newGrid)
-          gridGroup.name = 'gridGroup'
-          this.scene.add(gridGroup)
-        } else {
-          // fallback: recreate full grid layout meshes
-          this.gridArray = this.gridSetup.createNewGrid()
-          this.drawGridLayout(this.gridArray)
-        }
+        this.gridArray = this.gridSetup.createNewGrid()
+        if(this.drawOnScene && this.drawOnScene.gridLayout) this.drawGridLayout(this.gridArray)
+        if(this.drawOnScene && this.drawOnScene.buildings) this.drawGridBuildings(this.gridArray)
+        if(this.drawOnScene && this.drawOnScene.floor) this.createAndDrawFloor()
+        this.renderScene()
       }
       // non structural changes (e.g. flags) can be handled via handleDrawOnSceneChange
     },
 
     drawGridLayout(arrayOfGrids){
-      // create or replace a named group for grid layout so we can toggle it
-      let gridGroup = this.scene.getObjectByName && this.scene.getObjectByName('gridGroup')
-      if(gridGroup) {
-        // clear existing and dispose resources
-        while(gridGroup.children.length){
-          const child = gridGroup.children[0]
-          this.disposeObject(child)
-          gridGroup.remove(child)
-        }
-      } else {
-        gridGroup = markRaw(new Three.Group())
-        gridGroup.name = 'gridGroup'
-      }
-      let box
-      let h = 0.01
-      // compute spacing and center the grid at origin
+      if(!this.scene) return
       const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
       const spacing = (this.grid && this.grid.spacing) || 1
       const halfExtent = ((gridSize - 1) / 2) * spacing
-
-      arrayOfGrids.forEach((grid) => {
-        if(grid.contents == 'road'){
-          box = this.createBox(spacing, h, spacing, 0xD3D3D3, false)
-        }else if(grid.contents == 'building'){
-          box = this.createBox(spacing, h, spacing, 0x6a0dad, false)
-        }else if(grid.contents == 'junction'){
-          box = this.createBox(spacing, h, spacing, 0x6a0000, false)
-        }
-        const x = grid.coords.x * spacing - halfExtent
-        const z = grid.coords.y * spacing - halfExtent
-        box.position.set(x, 0.1, z)
-        gridGroup.add(box);
+      rebuildGridLayout({
+        scene: this.scene,
+        arrayOfGrids,
+        spacing,
+        halfExtent,
+        createBox: this.createBox,
+        disposeObject: this.disposeObject,
       })
-      // ensure group is added to scene
-      if(!this.scene.getObjectByName('gridGroup')) this.scene.add(gridGroup)
     },
     drawGridBuildings(arrayOfGrids){
-      // create or replace a named group for buildings so we can toggle it
-      let buildingGroup = this.scene.getObjectByName && this.scene.getObjectByName('buildingGroup')
-      if(buildingGroup) {
-        while(buildingGroup.children.length){
-          const child = buildingGroup.children[0]
-          this.disposeObject(child)
-          buildingGroup.remove(child)
-        }
-      } else {
-        buildingGroup = markRaw(new Three.Group())
-        buildingGroup.name = 'buildingGroup'
-      }
-      let box
-      let boxEdges
+      if(!this.scene) return
       const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
       const spacing = (this.grid && this.grid.spacing) || 1
       const halfExtent = ((gridSize - 1) / 2) * spacing
-
-      arrayOfGrids.forEach((grid) => {
-        if(grid.contents == 'building'){
-          let h = Math.random() * 5;
-          box = this.createBox(spacing, h, spacing, 0x000000, false)
-          boxEdges = this.createBoxEdges(spacing, h, spacing)
-          const x = grid.coords.x * spacing - halfExtent
-          const z = grid.coords.y * spacing - halfExtent
-          box.position.set(x, 0.1 + h/2, z)
-          boxEdges.position.set(x, 0.1 + h/2, z)
-          buildingGroup.add(boxEdges);
-          buildingGroup.add(box);
-        }
+      rebuildBuildings({
+        scene: this.scene,
+        arrayOfGrids,
+        spacing,
+        halfExtent,
+        createBox: this.createBox,
+        createBoxEdges: this.createBoxEdges,
+        disposeObject: this.disposeObject,
       })
-      if(!this.scene.getObjectByName('buildingGroup')) this.scene.add(buildingGroup)
     },
 
     // getGridWithCoords(x, y){
@@ -304,33 +279,21 @@ export default {
     setUpRenderer:function(){
       this.container = document.getElementById('container');
       this.renderer = markRaw(new Three.WebGLRenderer({antialias: true, alpha: true}));
-      this.renderer.setSize(this.container.clientWidth-100, this.container.clientHeight-100);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      this.renderer.setSize(Math.max(1, this.container.clientWidth-100), Math.max(1, this.container.clientHeight-100));
       this.renderer.setClearColor (0x000000, 0);
       this.container.appendChild(this.renderer.domElement);
     },
     createAndDrawFloor: function() {
-      // create or replace a named floor group
-      let floorGroup = this.scene.getObjectByName && this.scene.getObjectByName('floorGroup')
-      if(floorGroup){
-        while(floorGroup.children.length){
-          const child = floorGroup.children[0]
-          this.disposeObject(child)
-          floorGroup.remove(child)
-        }
-      } else {
-        floorGroup = markRaw(new Three.Group())
-        floorGroup.name = 'floorGroup'
-      }
+      if(!this.scene) return
       const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
       const spacing = (this.grid && this.grid.spacing) || 1
-      const width = gridSize * spacing
-      let geometry = new Three.BoxGeometry(width, 0.1, width);
-      let material = new Three.MeshBasicMaterial( { color: 0x000002, wireframe: false } );
-      const floorMesh = new Three.Mesh(geometry, material); // floor mesh
-      // position floor centered at origin
-      floorMesh.position.set(0, 0, 0);
-      floorGroup.add(floorMesh)
-      if(!this.scene.getObjectByName('floorGroup')) this.scene.add(floorGroup)
+      rebuildFloor({
+        scene: this.scene,
+        gridSize,
+        spacing,
+        disposeObject: this.disposeObject,
+      })
     },
     setUpCamera: function(){
       let fov = 70;
@@ -396,26 +359,11 @@ export default {
         const duration = (typeof opts.duration === 'number') ? opts.duration : 600
         // ensure camera exists
         if(!this.camera) return
-        // compute start and target vectors
-        const startPos = this.camera.position.clone()
-        const targetPos = new Three.Vector3(target.x, (typeof target.y === 'number' ? target.y : this.camera.position.y), target.z)
-
-        // compute look vectors (points in world space) so we can interpolate lookAt
-        const dir = this.camera.getWorldDirection(new Three.Vector3())
-        const startLook = startPos.clone().add(dir)
-        const lookAtTarget = targetPos.clone().add(dir)
 
         // exit pointer lock if active to avoid input conflict
         try{ if(document.exitPointerLock) document.exitPointerLock() }catch(e){ void e }
 
-        this.cameraAnimation = {
-          startPos,
-          targetPos,
-          startLook,
-          lookAtTarget,
-          startTime: performance.now(),
-          duration
-        }
+        this.cameraAnimation = createCameraAnimation(this.camera, target, { duration })
       }catch(e){ void e }
     },
 
@@ -440,6 +388,26 @@ export default {
       const delta = Math.min(0.05, deltaMs / 1000) // clamp delta to avoid big jumps
       this.lastTime = now
 
+      const simulationState = this.$store.state.simulation || {}
+      if(simulationState.running){
+        const speedMultiplier = Number(simulationState.speedMultiplier) || 1
+        this.simulationAccumulator += Math.max(0, deltaMs) * speedMultiplier
+        const maxTicksPerFrame = 8
+        let ticksProcessed = 0
+        while(
+          this.simulationAccumulator >= this.simulationStepMs &&
+          ticksProcessed < maxTicksPerFrame &&
+          (this.$store.state.simulation || {}).running
+        ){
+          this.simulationAccumulator -= this.simulationStepMs
+          this.$store.commit('simulation/incrementTick')
+          ticksProcessed += 1
+        }
+        if(this.simulationAccumulator > this.simulationStepMs * maxTicksPerFrame){
+          this.simulationAccumulator = this.simulationStepMs * maxTicksPerFrame
+        }
+      }
+
       if(this.cameraOrbiting){
         const t = (now || performance.now()) / 1000
         const angle = t * this.orbitSpeed
@@ -448,7 +416,8 @@ export default {
         this.camera.position.x = Math.cos(angle) * r
         this.camera.position.z = Math.sin(angle) * r
         this.camera.position.y = y
-        this.camera.lookAt(new Three.Vector3(0,0,0))
+        this.tmpLookVec.set(0, 0, 0)
+        this.camera.lookAt(this.tmpLookVec)
       } else {
         if(this.cameraAnimation){
           // camera is animating; skip input updates this frame
@@ -462,30 +431,20 @@ export default {
       // process camera animation if active
       if(this.cameraAnimation){
         try{
-          const a = this.cameraAnimation
-          const elapsed = Math.max(0, now - (a.startTime || now))
-          const traw = Math.min(1, elapsed / (a.duration || 600))
-          const t = (traw < 0.5) ? (2 * traw * traw) : (-1 + (4 - 2 * traw) * traw) // easeInOutQuad
-          // interpolate position
-          this.camera.position.lerpVectors(a.startPos, a.targetPos, t)
-          // interpolate lookAt point
-          if(a.startLook && a.lookAtTarget){
-            const look = new Three.Vector3().lerpVectors(a.startLook, a.lookAtTarget, t)
-            this.camera.lookAt(look)
-          }
-          if(traw >= 1){
+          const result = stepCameraAnimation(this.camera, this.cameraAnimation, now, this.tmpLookVec)
+          if(result.done){
             this.cameraAnimation = null
           }
         }catch(e){ void e }
       }
 
+      if(!this.renderer || !this.scene || !this.camera) return
       this.renderer.render(this.scene, this.camera)
       // update mini-map with current camera position and direction
       try{
-        const dir = new Three.Vector3()
-        this.camera.getWorldDirection(dir)
+        this.camera.getWorldDirection(this.tmpDirVec)
         if(this.$refs && this.$refs.miniMap && typeof this.$refs.miniMap.updateCamera === 'function'){
-          this.$refs.miniMap.updateCamera(this.camera.position, dir)
+          this.$refs.miniMap.updateCamera(this.camera.position, this.tmpDirVec)
         }
       }catch(e){ void e }
       this._rafId = requestAnimationFrame(this._animate)

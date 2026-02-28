@@ -10,11 +10,11 @@ export default {
   },
   computed: {
     openWindow () {
-      const item = (this.$store.getters.navState || []).find(n => n.name === 'todo')
+      const item = (this.$store.state.nav.items || []).find(n => n.name === 'todo')
       return !!(item && item.open)
     },
     panelIndex () {
-      const openPanels = (this.$store.getters.navState || []).filter(n => n.open)
+      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open)
       return openPanels.findIndex(n => n.name === 'todo')
     },
     panelStyle () {

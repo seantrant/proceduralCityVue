@@ -33,6 +33,13 @@
     margin-top:2px;
   }
 
+  .sim-value{
+    display:inline-block;
+    min-width:3ch;
+    text-align:right;
+    font-variant-numeric: tabular-nums;
+  }
+
   input{
     margin-left:0;
     width:86px;

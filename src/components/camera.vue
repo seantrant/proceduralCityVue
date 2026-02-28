@@ -39,11 +39,11 @@ export default {
   },
   computed: {
     openWindow () {
-      const item = (this.$store.getters.navState || []).find(n => n.name === 'camera')
+      const item = (this.$store.state.nav.items || []).find(n => n.name === 'camera')
       return !!(item && item.open)
     },
     panelIndex () {
-      const openPanels = (this.$store.getters.navState || []).filter(n => n.open)
+      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open)
       return openPanels.findIndex(n => n.name === 'camera')
     },
     panelStyle () {
@@ -53,11 +53,11 @@ export default {
     },
     cameraHelicopter: {
       get() {
-        const scene = this.$store.getters.getScene || {}
+        const scene = this.$store.state.sceneView || {}
         return !!(scene.camera && scene.camera.helicopter)
       },
       set(val) {
-        this.$store.commit('updateCamera', { helicopter: !!val })
+        this.$store.commit('sceneView/updateCamera', { helicopter: !!val })
       }
     }
   },

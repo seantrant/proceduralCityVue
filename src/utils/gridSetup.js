@@ -3,7 +3,15 @@ export class GridSetup {
   constructor(args){
     // this.scene = args.scene // dont need
     this.store = args.store
-    this.grid = this.store.getters.getScene.grid
+  }
+
+  getGridConfig(){
+    const scene = this.store && this.store.state && this.store.state.sceneView
+    const grid = scene && scene.grid ? scene.grid : {}
+    return {
+      gridSize: typeof grid.gridSize === 'number' ? grid.gridSize : 8,
+      spacing: typeof grid.spacing === 'number' ? grid.spacing : 1,
+    }
   }
 
   createNewGrid(){
@@ -14,7 +22,7 @@ export class GridSetup {
     let arrayContainingGrids = []
     let currentRow = 0
     let currentColumn = 0
-    let gridSize = this.grid.gridSize // must have square root for now
+    let gridSize = this.getGridConfig().gridSize // must have square root for now
     let totalGrids = gridSize * gridSize
     let count = 1
     for(let i = 0; i < totalGrids; i++){
@@ -46,22 +54,6 @@ export class GridSetup {
       return grid
     })
   }
-
-  // drawGridLayout(arrayOfGrids){
-  //   let box
-  //   let h = 0.01
-  //   arrayOfGrids.forEach((grid) => {
-  //     if(grid.contents == 'road'){
-  //       box = this.createBox(1, h, 1, 0xD3D3D3, false)
-  //     }else if(grid.contents == 'building'){
-  //       box = this.createBox(1, h, 1, 0x6a0dad, false)
-  //     }else if(grid.contents == 'junction'){
-  //       box = this.createBox(1, h, 1, 0x6a0000, false)
-  //     }
-  //     box.position.set(grid.coords.x, 0.1, grid.coords.y)
-  //     this.scene.add(box);
-  //   })
-  // }
 
   isOdd(num){
     return num % 2
