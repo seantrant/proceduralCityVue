@@ -72,6 +72,7 @@ export default {
 
       gridSetup: null,
       input: null,
+      cameraAnimation: null,
       lastTime: null,
       pointerLocked: false,
     }
@@ -390,14 +391,38 @@ export default {
       this.renderScene();
     },
 
+    animateCameraTo(target = {x:0,y:4.5,z:0}, opts = {}){
+      try{
+        const duration = (typeof opts.duration === 'number') ? opts.duration : 600
+        // ensure camera exists
+        if(!this.camera) return
+        // compute start and target vectors
+        const startPos = this.camera.position.clone()
+        const targetPos = new Three.Vector3(target.x, (typeof target.y === 'number' ? target.y : this.camera.position.y), target.z)
+
+        // compute look vectors (points in world space) so we can interpolate lookAt
+        const dir = this.camera.getWorldDirection(new Three.Vector3())
+        const startLook = startPos.clone().add(dir)
+        const lookAtTarget = targetPos.clone().add(dir)
+
+        // exit pointer lock if active to avoid input conflict
+        try{ if(document.exitPointerLock) document.exitPointerLock() }catch(e){ void e }
+
+        this.cameraAnimation = {
+          startPos,
+          targetPos,
+          startLook,
+          lookAtTarget,
+          startTime: performance.now(),
+          duration
+        }
+      }catch(e){ void e }
+    },
+
     onMiniMapClick(payload) {
-      if(!payload || !this.camera) return
-      const y = this.camera.position.y
-      this.camera.position.x = payload.x
-      this.camera.position.z = payload.z
-      // look slightly ahead of the new position so orientation feels natural
-      this.camera.lookAt(new Three.Vector3(payload.x + 1, y, payload.z))
-      this.renderScene()
+      if(!payload) return
+      // smooth animate camera to clicked world coordinate
+      this.animateCameraTo({ x: payload.x, y: this.camera ? this.camera.position.y : undefined, z: payload.z }, { duration: 600 })
     },
 
     renderScene: function() {
@@ -425,9 +450,33 @@ export default {
         this.camera.position.y = y
         this.camera.lookAt(new Three.Vector3(0,0,0))
       } else {
-        if(this.input && typeof this.input.update === 'function'){
-          this.input.update(delta)
+        if(this.cameraAnimation){
+          // camera is animating; skip input updates this frame
+        } else {
+          if(this.input && typeof this.input.update === 'function'){
+            this.input.update(delta)
+          }
         }
+      }
+
+      // process camera animation if active
+      if(this.cameraAnimation){
+        try{
+          const a = this.cameraAnimation
+          const elapsed = Math.max(0, now - (a.startTime || now))
+          const traw = Math.min(1, elapsed / (a.duration || 600))
+          const t = (traw < 0.5) ? (2 * traw * traw) : (-1 + (4 - 2 * traw) * traw) // easeInOutQuad
+          // interpolate position
+          this.camera.position.lerpVectors(a.startPos, a.targetPos, t)
+          // interpolate lookAt point
+          if(a.startLook && a.lookAtTarget){
+            const look = new Three.Vector3().lerpVectors(a.startLook, a.lookAtTarget, t)
+            this.camera.lookAt(look)
+          }
+          if(traw >= 1){
+            this.cameraAnimation = null
+          }
+        }catch(e){ void e }
       }
 
       this.renderer.render(this.scene, this.camera)
