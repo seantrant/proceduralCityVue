@@ -1,66 +1,101 @@
 <template>
-  <transition name="fade">
-    <aside v-if="openWindow">
+  <transition name="panel">
+    <aside
+      v-if="openWindow"
+      class="option-panel"
+      :style="panelStyle"
+    >
       <p>Settings</p>
       <ul class="noselect">
-        <li>
-          Grid Size<input
+        <li class="panel-row">
+          <span class="panel-key">Grid Size</span>
+          <input
             v-model="grid.gridSize"
             placeholder="8"
           >
         </li>
 
         <hr>
-        Show on Scene
-        <br>
-        <li>
-          Floor
+        <li class="panel-section">
+          Show on Scene
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Floor</span>
           <input
             v-model="drawOnScene.floor"
             type="checkbox"
-            >
+          >
         </li>
-        <li>
-          Grid Layout
+        <li class="panel-row">
+          <span class="panel-key">Grid Layout</span>
           <input
             v-model="drawOnScene.gridLayout"
             type="checkbox"
-            >
+          >
         </li>
-        <li>
-          Buildings
+        <li class="panel-row">
+          <span class="panel-key">Buildings</span>
           <input
             v-model="drawOnScene.buildings"
             type="checkbox"
-            >
+          >
         </li>
 
 
-        <button
-          class="generateButton"
-          @click="reGenerate()"
-        >
-          Generate
-        </button>
+        <li class="panel-row panel-row-action">
+          <span class="panel-key">Scene</span>
+          <button
+            class="generateButton"
+            @click="reGenerate()"
+          >
+            Generate
+          </button>
+        </li>
         <hr>
-        <p>FPS Controls</p>
-        <li>
-          Mouse sensitivity
-          <input v-model.number="fps.mouseSensitivity" step="0.001" min="0.0001">
+        <li class="panel-section">
+          FPS Controls
         </li>
-        <li>
-          Move speed
-          <input v-model.number="fps.moveSpeed" step="0.1" min="0.1">
+        <li class="panel-row">
+          <span class="panel-key">Mouse sensitivity</span>
+          <input
+            v-model.number="fps.mouseSensitivity"
+            step="0.001"
+            min="0.0001"
+          >
         </li>
-        <li>
-          Acceleration
-          <input v-model.number="fps.acceleration" step="1" min="0">
+        <li class="panel-row">
+          <span class="panel-key">Move speed</span>
+          <input
+            v-model.number="fps.moveSpeed"
+            step="0.1"
+            min="0.1"
+          >
         </li>
-        <li>
-          Friction
-          <input v-model.number="fps.friction" step="1" min="0">
+        <li class="panel-row">
+          <span class="panel-key">Acceleration</span>
+          <input
+            v-model.number="fps.acceleration"
+            step="1"
+            min="0"
+          >
         </li>
-        <button class="generateButton" @click="applyFpsSettings()">Apply FPS Settings</button>
+        <li class="panel-row">
+          <span class="panel-key">Friction</span>
+          <input
+            v-model.number="fps.friction"
+            step="1"
+            min="0"
+          >
+        </li>
+        <li class="panel-row panel-row-action">
+          <span class="panel-key">FPS</span>
+          <button
+            class="generateButton"
+            @click="applyFpsSettings()"
+          >
+            Apply
+          </button>
+        </li>
       </ul>
     </aside>
   </transition>

@@ -10,7 +10,17 @@ export default {
   },
   computed: {
     openWindow () {
-      return this.$store.getters.navState[0].open
+      const item = (this.$store.getters.navState || []).find(n => n.name === 'todo')
+      return !!(item && item.open)
+    },
+    panelIndex () {
+      const openPanels = (this.$store.getters.navState || []).filter(n => n.open)
+      return openPanels.findIndex(n => n.name === 'todo')
+    },
+    panelStyle () {
+      return {
+        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
+      }
     }
   },
   watch: {
@@ -29,8 +39,25 @@ export default {
     },
 
     listItemClicked(item){
+      this.copyToClipboard(item.item)
       item.checked = !item.checked
       this.updateStorage();
+    },
+
+    copyToClipboard(text){
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+        return
+      }
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.setAttribute('readonly', '')
+      textArea.style.position = 'absolute'
+      textArea.style.left = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
     },
 
     addItem(){

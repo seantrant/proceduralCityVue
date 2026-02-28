@@ -1,13 +1,28 @@
 <template>
-  <transition name="fade">
-    <aside v-if="openWindow">
+  <transition name="panel">
+    <aside
+      v-if="openWindow"
+      class="option-panel"
+      :style="panelStyle"
+    >
       <p>Camera</p>
       <ul class="noselect">
-        <li>
-          <button @click="requestPointerLock">Enable FPS Controls (click scene)</button>
+        <li class="panel-row">
+          <span class="panel-key">FPS Controls</span>
+          <button @click="requestPointerLock">
+            Enable
+          </button>
         </li>
-        <li>
-          <small>Pointer lock: <strong>{{ pointerLocked ? 'Locked' : 'Unlocked' }}</strong></small>
+        <li class="panel-row">
+          <span class="panel-key">Pointer lock</span>
+          <small><strong>{{ pointerLocked ? 'Locked' : 'Unlocked' }}</strong></small>
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Helicopter mode</span>
+          <input
+            v-model="cameraHelicopter"
+            type="checkbox"
+          >
         </li>
       </ul>
     </aside>
@@ -24,7 +39,26 @@ export default {
   },
   computed: {
     openWindow () {
-      return this.$store.getters.navState[1].open
+      const item = (this.$store.getters.navState || []).find(n => n.name === 'camera')
+      return !!(item && item.open)
+    },
+    panelIndex () {
+      const openPanels = (this.$store.getters.navState || []).filter(n => n.open)
+      return openPanels.findIndex(n => n.name === 'camera')
+    },
+    panelStyle () {
+      return {
+        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
+      }
+    },
+    cameraHelicopter: {
+      get() {
+        const scene = this.$store.getters.getScene || {}
+        return !!(scene.camera && scene.camera.helicopter)
+      },
+      set(val) {
+        this.$store.commit('updateCamera', { helicopter: !!val })
+      }
     }
   },
   watch: {
@@ -53,24 +87,11 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped lang="scss">
+@import "./optionsPanel.scss";
 
-aside{
-  height:auto;
-  width:200px;
-  position:absolute;
-  top:60px;
-  right:0;
-  padding:0 1rem;
-  border-bottom: 1px solid white;
-  border-left: 1px solid white;
-  border-top: 1px solid white;
-  text-align: left;
-  color:white;
-  background: black;
-  opacity: 0.8;
-
+.option-panel{
   p{
-    margin-bottom:0px;
+    margin-bottom:0;
   }
 
   ul{
@@ -81,34 +102,8 @@ aside{
     padding-top:1rem;
 
     li{
-      // color:red;
-    }
-
-    li.checked{
-      text-decoration: line-through;
-    }
-
-  }
-
-  .remove-button{
-    float:right;
-  }
-
-  .addButton{
-    margin:10px 0 16px 0;
-
-    input{
-      width:70%;
+      margin-bottom:10px;
     }
   }
-}
-
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity .5s;
-}
-
-.fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
-  opacity: 0;
 }
 </style>

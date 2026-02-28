@@ -5,10 +5,8 @@
 // Delete
 
 export class NavState {
-
-  nav = { 'todo': true, 'cameraControls': false, 'settings': false }
-
   constructor(){
+    this.nav = { 'todo': true, 'cameraControls': false, 'settings': false }
     // let stationSettings = localStorage['stationSettings']
 		// if (stationSettings) this.stationSettings = JSON.parse(stationSettings)
   }

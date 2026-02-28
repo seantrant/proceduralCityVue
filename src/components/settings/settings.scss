@@ -1,21 +1,8 @@
+@import "../optionsPanel.scss";
 
-aside{
-  height:auto;
-  width:200px;
-  position:absolute;
-  top:60px;
-  right:0;
-  padding:0 1rem;
-  border-bottom: 1px solid white;
-  border-left: 1px solid white;
-  border-top: 1px solid white;
-  text-align: left;
-  color:white;
-  background: black;
-  opacity: 0.8;
-
+.option-panel{
   p{
-    margin-bottom:0px;
+    margin-bottom:0;
   }
 
   ul{
@@ -29,32 +16,25 @@ aside{
       margin-bottom:10px;
     }
 
-    li.checked{
-      text-decoration: line-through;
+    .panel-section{
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:0.04em;
+      opacity:0.9;
+      margin-bottom:8px;
     }
-
-  }
-
-  .remove-button{
-    float:right;
   }
 
   .generateButton{
-    margin:10px 0 16px 0;
+    margin:0;
+  }
 
+  .panel-row-action{
+    margin-top:2px;
   }
 
   input{
-    margin-left: 5px;
-    width:50%;
+    margin-left:0;
+    width:86px;
   }
-}
-
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity .5s;
-}
-
-.fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
-  opacity: 0;
 }

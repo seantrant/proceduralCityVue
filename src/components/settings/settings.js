@@ -14,7 +14,17 @@ export default {
   },
   computed: {
     openWindow () {
-      return this.$store.getters.navState[2].open
+      const item = (this.$store.getters.navState || []).find(n => n.name === 'settings')
+      return !!(item && item.open)
+    },
+    panelIndex () {
+      const openPanels = (this.$store.getters.navState || []).filter(n => n.open)
+      return openPanels.findIndex(n => n.name === 'settings')
+    },
+    panelStyle () {
+      return {
+        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
+      }
     }
   },
   watch: {

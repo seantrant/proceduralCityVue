@@ -1,22 +1,32 @@
 <template>
-  <transition name="fade">
-    <aside v-if="openWindow">
+  <transition name="panel">
+    <aside
+      v-if="openWindow"
+      class="option-panel"
+      :style="panelStyle"
+    >
       <p>Todo</p>
       <ul class="noselect">
         <li
           v-for="list in toDoList"
           :key="list.item"
           :class="{checked: list.checked }"
+          class="panel-row todo-row"
         >
-          <span @click="listItemClicked(list)">{{ list.item }}</span>
           <span
+            class="todo-item"
+            @click="listItemClicked(list)"
+          >{{ list.item }}</span>
+          <button
             class="remove-button"
             @click="removeItem(list.item)"
-          > &nbsp; x</span>
+          >
+            x
+          </button>
         </li>
       </ul>
 
-      <div class="addButton">
+      <div class="addButton panel-row">
         <input
           v-model="addToListInput"
           placeholder="Add item"

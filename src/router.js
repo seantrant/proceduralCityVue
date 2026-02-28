@@ -1,4 +1,3 @@
-/* global process */
 import { createRouter, createWebHistory } from 'vue-router';
 import Scene from './views/Scene.vue';
 

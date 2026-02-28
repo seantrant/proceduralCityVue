@@ -8,6 +8,9 @@
       <li @click="openNav('camera')">
         <i class="fa fa-arrows-alt" />
       </li>
+      <li @click="openNav('layers')">
+        <i class="fa fa-th-large" />
+      </li>
       <li @click="openNav('settings')">
         <i class="fa fa-cogs" />
       </li>

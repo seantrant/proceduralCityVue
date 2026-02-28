@@ -5,6 +5,7 @@ export default createStore({
     nav: [
       { name: 'todo', open: false },
       { name: 'camera', open: false },
+      { name: 'layers', open: false },
       { name: 'settings', open: true }
     ],
     scene: {
@@ -16,6 +17,10 @@ export default createStore({
       grid:{
         gridSize: 8,
       }
+      ,
+      camera: {
+        helicopter: false
+      }
     }
 
   },
@@ -25,9 +30,8 @@ export default createStore({
   },
   mutations: {
     changeNav (state, payload) {
-      state.nav.forEach( (navItem) => {
-        navItem.open = (navItem.name === payload)
-      })
+      const navItem = state.nav.find(n => n.name === payload)
+      if(navItem) navItem.open = !navItem.open
     },
 
     updateScene (state, payload) {
@@ -40,6 +44,10 @@ export default createStore({
 
     updateGrid (state, payload) {
       state.scene.grid = Object.assign({}, state.scene.grid, payload)
+    },
+
+    updateCamera (state, payload) {
+      state.scene.camera = Object.assign({}, state.scene.camera, payload)
     },
 
     replaceScene (state, payload) {

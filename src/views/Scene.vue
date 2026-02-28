@@ -3,11 +3,24 @@
     <appNav />
     <appTodo />
     <appCamera />
+    <appLayers />
     <appSettings />
-    <div v-if="pointerLocked" class="fps-hint">
+    <mini-map
+      ref="miniMap"
+      :grid-array="gridArray"
+      :size="200"
+      :draw-on-scene="drawOnScene"
+      @minimap-click="onMiniMapClick"
+    />
+    <div
+      v-if="pointerLocked"
+      class="fps-hint"
+    >
       <div class="fps-hint-inner">
         <div>FPS controls active — WASD to move, mouse to look</div>
-        <div class="muted">Press Esc to release pointer</div>
+        <div class="muted">
+          Press Esc to release pointer
+        </div>
       </div>
     </div>
   </div>
@@ -19,7 +32,9 @@ import { markRaw } from 'vue'
 import appNav from '@/components/nav'
 import appTodo from '@/components/todo/todo.vue'
 import appCamera from '@/components/camera'
+import appLayers from '@/components/layers'
 import appSettings from '@/components/settings/settings.vue'
+import miniMap from '@/components/miniMap.vue'
 import UserInput from '@/utils/userInput.js'
 import GridSetup from '@/utils/gridSetup.js'
 
@@ -29,7 +44,9 @@ export default {
     appNav,
     appTodo,
     appCamera,
+    appLayers,
     appSettings,
+    miniMap,
   },
   data() {
     return {
@@ -41,6 +58,13 @@ export default {
       camera_y: 8,
       container: null,
       middleMouseDown: false,
+
+      // orbit / helicopter mode
+      cameraOrbiting: false,
+      orbitStart: 0,
+      orbitRadius: 40,
+      orbitAltitude: 12,
+      orbitSpeed: 0.05,
 
       drawOnScene: this.$store.getters.getScene.drawOnScene,
       grid: this.$store.getters.getScene.grid,
@@ -82,6 +106,17 @@ export default {
     '$store.state.scene.grid': {
       handler(newVal, oldVal) {
         this.handleGridChange(newVal, oldVal)
+      },
+      deep: true
+    }
+    ,
+    '$store.state.scene.camera': {
+      handler(newVal){
+        if(newVal && newVal.helicopter){
+          this.startOrbit()
+        } else {
+          this.stopOrbit()
+        }
       },
       deep: true
     }
@@ -203,15 +238,22 @@ export default {
       }
       let box
       let h = 0.01
+      // compute spacing and center the grid at origin
+      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
+      const spacing = (this.grid && this.grid.spacing) || 1
+      const halfExtent = ((gridSize - 1) / 2) * spacing
+
       arrayOfGrids.forEach((grid) => {
         if(grid.contents == 'road'){
-          box = this.createBox(1, h, 1, 0xD3D3D3, false)
+          box = this.createBox(spacing, h, spacing, 0xD3D3D3, false)
         }else if(grid.contents == 'building'){
-          box = this.createBox(1, h, 1, 0x6a0dad, false)
+          box = this.createBox(spacing, h, spacing, 0x6a0dad, false)
         }else if(grid.contents == 'junction'){
-          box = this.createBox(1, h, 1, 0x6a0000, false)
+          box = this.createBox(spacing, h, spacing, 0x6a0000, false)
         }
-        box.position.set(grid.coords.x, 0.1, grid.coords.y)
+        const x = grid.coords.x * spacing - halfExtent
+        const z = grid.coords.y * spacing - halfExtent
+        box.position.set(x, 0.1, z)
         gridGroup.add(box);
       })
       // ensure group is added to scene
@@ -232,13 +274,19 @@ export default {
       }
       let box
       let boxEdges
+      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
+      const spacing = (this.grid && this.grid.spacing) || 1
+      const halfExtent = ((gridSize - 1) / 2) * spacing
+
       arrayOfGrids.forEach((grid) => {
         if(grid.contents == 'building'){
           let h = Math.random() * 5;
-          box = this.createBox(1, h, 1, 0x000000, false)
-          boxEdges = this.createBoxEdges(1, h, 1)
-          box.position.set(grid.coords.x, 0.1 + h/2, grid.coords.y)
-          boxEdges.position.set(grid.coords.x, 0.1 + h/2, grid.coords.y)
+          box = this.createBox(spacing, h, spacing, 0x000000, false)
+          boxEdges = this.createBoxEdges(spacing, h, spacing)
+          const x = grid.coords.x * spacing - halfExtent
+          const z = grid.coords.y * spacing - halfExtent
+          box.position.set(x, 0.1 + h/2, z)
+          boxEdges.position.set(x, 0.1 + h/2, z)
           buildingGroup.add(boxEdges);
           buildingGroup.add(box);
         }
@@ -272,10 +320,14 @@ export default {
         floorGroup = markRaw(new Three.Group())
         floorGroup.name = 'floorGroup'
       }
-      let geometry = new Three.BoxGeometry(100, 0.1, 100);
+      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
+      const spacing = (this.grid && this.grid.spacing) || 1
+      const width = gridSize * spacing
+      let geometry = new Three.BoxGeometry(width, 0.1, width);
       let material = new Three.MeshBasicMaterial( { color: 0x000002, wireframe: false } );
       const floorMesh = new Three.Mesh(geometry, material); // floor mesh
-      floorMesh.position.set(1, 0, 1);
+      // position floor centered at origin
+      floorMesh.position.set(0, 0, 0);
       floorGroup.add(floorMesh)
       if(!this.scene.getObjectByName('floorGroup')) this.scene.add(floorGroup)
     },
@@ -285,9 +337,12 @@ export default {
       let near = 0.1;
       let far = 500000;
       this.camera = markRaw(new Three.PerspectiveCamera(fov, aspect, near, far));
-      this.camera.position.set(this.camera_x, 4.5, this.camera_y); // Set position like this
-      this.camera.lookAt(new Three.Vector3(0,0,9)); // Set look at coordinate like this
-      this.camera.position.z = 2;
+      // center camera over the scene and look at origin
+      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
+      const spacing = (this.grid && this.grid.spacing) || 1
+      const halfExtent = ((gridSize - 1) / 2) * spacing
+      this.camera.position.set(0, 4.5, halfExtent + 2)
+      this.camera.lookAt(new Three.Vector3(0,0,0))
     },
     createBoxEdges: function (l, h, w){ //shape class
       let geometry = new Three.BoxGeometry( l, h, w );
@@ -311,6 +366,20 @@ export default {
       }
     },
 
+    startOrbit(){
+      if(this.cameraOrbiting) return
+      this.cameraOrbiting = true
+      this.orbitStart = performance.now()
+      // optionally release pointer lock so the cursor is available
+      try{ if(document.exitPointerLock) document.exitPointerLock() }catch(e){ void e }
+    },
+
+    stopOrbit(){
+      if(!this.cameraOrbiting) return
+      this.cameraOrbiting = false
+      // leave camera where it is; user can re-enable pointer lock for manual control
+    },
+
     updateFov: function(delta){
       if(delta === 1 && this.camera.fov < 180){
         this.camera.fov++
@@ -319,6 +388,16 @@ export default {
       }
       this.camera.updateProjectionMatrix()
       this.renderScene();
+    },
+
+    onMiniMapClick(payload) {
+      if(!payload || !this.camera) return
+      const y = this.camera.position.y
+      this.camera.position.x = payload.x
+      this.camera.position.z = payload.z
+      // look slightly ahead of the new position so orientation feels natural
+      this.camera.lookAt(new Three.Vector3(payload.x + 1, y, payload.z))
+      this.renderScene()
     },
 
     renderScene: function() {
@@ -335,10 +414,31 @@ export default {
       const deltaMs = now - (this.lastTime || now)
       const delta = Math.min(0.05, deltaMs / 1000) // clamp delta to avoid big jumps
       this.lastTime = now
-      if(this.input && typeof this.input.update === 'function'){
-        this.input.update(delta)
+
+      if(this.cameraOrbiting){
+        const t = (now || performance.now()) / 1000
+        const angle = t * this.orbitSpeed
+        const r = this.orbitRadius
+        const y = this.orbitAltitude
+        this.camera.position.x = Math.cos(angle) * r
+        this.camera.position.z = Math.sin(angle) * r
+        this.camera.position.y = y
+        this.camera.lookAt(new Three.Vector3(0,0,0))
+      } else {
+        if(this.input && typeof this.input.update === 'function'){
+          this.input.update(delta)
+        }
       }
+
       this.renderer.render(this.scene, this.camera)
+      // update mini-map with current camera position and direction
+      try{
+        const dir = new Three.Vector3()
+        this.camera.getWorldDirection(dir)
+        if(this.$refs && this.$refs.miniMap && typeof this.$refs.miniMap.updateCamera === 'function'){
+          this.$refs.miniMap.updateCamera(this.camera.position, dir)
+        }
+      }catch(e){ void e }
       this._rafId = requestAnimationFrame(this._animate)
     },
     // traverse an Object3D and dispose geometries, materials, and textures
