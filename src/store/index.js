@@ -4,6 +4,13 @@ import sceneViewModule from './modules/sceneView'
 import simulationModule from './modules/simulation'
 import simulationGridModule from './modules/simulationGrid'
 import simulationCameraModule from './modules/simulationCamera'
+import {
+  defaultAtmosphereConfig,
+  defaultCameraConfig,
+  defaultDrawOnScene,
+  defaultGridConfig,
+  defaultInputConfig,
+} from '@/types/city'
 
 export default createStore({
   state: {
@@ -48,24 +55,20 @@ export default createStore({
 
     replaceScene (state, payload) {
       const defaults = {
-        drawOnScene: {
-          gridLayout: false,
-          buildings: true,
-          floor: true
-        },
-        grid: {
-          gridSize: 8,
-          spacing: 1,
-        },
-        camera: {
-          helicopter: false
-        }
+        drawOnScene: { ...defaultDrawOnScene },
+        grid: { ...defaultGridConfig },
+        camera: { ...defaultCameraConfig },
+        atmosphere: { ...defaultAtmosphereConfig },
+        input: { ...defaultInputConfig },
       }
       const incoming = payload || {}
       state.sceneView = {
         drawOnScene: Object.assign({}, defaults.drawOnScene, incoming.drawOnScene || {}),
         grid: Object.assign({}, defaults.grid, incoming.grid || {}),
-        camera: Object.assign({}, defaults.camera, incoming.camera || {})
+        camera: Object.assign({}, defaults.camera, incoming.camera || {}),
+        atmosphere: Object.assign({}, defaults.atmosphere, incoming.atmosphere || {}),
+        input: Object.assign({}, defaults.input, incoming.input || {}),
+        pointerLockRequestToken: 0,
       }
       state.sceneVersion += 1
     }

@@ -1,13 +1,18 @@
 import {
+  defaultAtmosphereConfig,
   defaultCameraConfig,
   defaultDrawOnScene,
   defaultGridConfig,
+  defaultInputConfig,
 } from '@/types/city'
 
 export const buildDefaultSceneView = () => ({
   drawOnScene: { ...defaultDrawOnScene },
   grid: { ...defaultGridConfig },
-  camera: { ...defaultCameraConfig }
+  camera: { ...defaultCameraConfig },
+  atmosphere: { ...defaultAtmosphereConfig },
+  input: { ...defaultInputConfig },
+  pointerLockRequestToken: 0,
 })
 
 export default {
@@ -29,12 +34,24 @@ export default {
     updateCamera(state, payload) {
       state.camera = Object.assign({}, state.camera, payload || {})
     },
+    updateAtmosphere(state, payload) {
+      state.atmosphere = Object.assign({}, state.atmosphere, payload || {})
+    },
+    updateInput(state, payload) {
+      state.input = Object.assign({}, state.input, payload || {})
+    },
+    requestPointerLock(state) {
+      state.pointerLockRequestToken = (Number(state.pointerLockRequestToken) || 0) + 1
+    },
     replaceScene(state, payload) {
       const base = buildDefaultSceneView()
       const incoming = payload || {}
       state.drawOnScene = Object.assign({}, base.drawOnScene, incoming.drawOnScene || {})
       state.grid = Object.assign({}, base.grid, incoming.grid || {})
       state.camera = Object.assign({}, base.camera, incoming.camera || {})
+      state.atmosphere = Object.assign({}, base.atmosphere, incoming.atmosphere || {})
+      state.input = Object.assign({}, base.input, incoming.input || {})
+      state.pointerLockRequestToken = base.pointerLockRequestToken
     }
   }
 }

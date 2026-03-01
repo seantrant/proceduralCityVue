@@ -3,14 +3,17 @@ export default {
   data() {
     const scene = this.$store.state.sceneView || {}
     return {
+      isSyncingDrawOnScene: 0,
+      isSyncingGrid: 0,
+      isSyncingInput: 0,
       drawOnScene: Object.assign({}, scene.drawOnScene || {}),
       grid: Object.assign({}, scene.grid || {}),
-      fps: {
+      fps: Object.assign({}, scene.input || {
         mouseSensitivity: 0.0025,
         moveSpeed: 5.0,
         acceleration: 30.0,
         friction: 10.0,
-      }
+      })
     }
   },
   computed: {
@@ -51,49 +54,115 @@ export default {
   watch: {
     '$store.state.sceneView.drawOnScene': {
       handler(newVal) {
+        this.isSyncingDrawOnScene++
         this.drawOnScene = Object.assign({}, newVal || {})
+        this.$nextTick(() => {
+          this.isSyncingDrawOnScene--
+        })
       },
       deep: true
     },
     '$store.state.sceneView.grid': {
       handler(newVal) {
+        this.isSyncingGrid++
         this.grid = Object.assign({}, newVal || {})
+        this.$nextTick(() => {
+          this.isSyncingGrid--
+        })
       },
       deep: true
     },
-    // commit drawOnScene changes immediately so the scene can update incrementally
+    '$store.state.sceneView.input': {
+      handler(newVal) {
+        this.isSyncingInput++
+        this.fps = Object.assign({}, newVal || {})
+        this.$nextTick(() => {
+          this.isSyncingInput--
+        })
+      },
+      deep: true
+    },
     drawOnScene: {
       handler(newVal) {
-        this.$store.commit('sceneView/updateDrawOnScene', newVal)
+        if (this.isSyncingDrawOnScene) return
+        const current = (this.$store.state.sceneView || {}).drawOnScene || {}
+        const next = newVal || {}
+        const same =
+          !!next.floor === !!current.floor &&
+          !!next.gridLayout === !!current.gridLayout &&
+          !!next.buildings === !!current.buildings &&
+          !!next.roofLights === !!current.roofLights
+        if (same) return
+        this.$store.commit('sceneView/updateDrawOnScene', next)
       },
       deep: true
     },
-    // commit grid changes immediately (grid size etc)
     grid: {
       handler(newVal) {
-        this.$store.commit('sceneView/updateGrid', newVal)
+        if (this.isSyncingGrid) return
+        const toNum = value => {
+          const parsed = Number(value)
+          return Number.isFinite(parsed) ? parsed : 0
+        }
+
+        const current = (this.$store.state.sceneView || {}).grid || {}
+        const next = {
+          ...newVal,
+          gridSize: toNum((newVal || {}).gridSize),
+          spacing: toNum((newVal || {}).spacing ?? current.spacing ?? 1),
+        }
+
+        const same =
+          toNum(next.gridSize) === toNum(current.gridSize) &&
+          toNum(next.spacing) === toNum(current.spacing)
+        if (same) return
+
+        this.$store.commit('sceneView/updateGrid', next)
+      },
+      deep: true
+    },
+    fps: {
+      handler(newVal) {
+        if (this.isSyncingInput) return
+        const current = (this.$store.state.sceneView || {}).input || {}
+        const toNum = value => {
+          const parsed = Number(value)
+          return Number.isFinite(parsed) ? parsed : 0
+        }
+
+        const next = {
+          mouseSensitivity: toNum((newVal || {}).mouseSensitivity),
+          moveSpeed: toNum((newVal || {}).moveSpeed),
+          acceleration: toNum((newVal || {}).acceleration),
+          friction: toNum((newVal || {}).friction),
+        }
+
+        const same =
+          toNum(next.mouseSensitivity) === toNum(current.mouseSensitivity) &&
+          toNum(next.moveSpeed) === toNum(current.moveSpeed) &&
+          toNum(next.acceleration) === toNum(current.acceleration) &&
+          toNum(next.friction) === toNum(current.friction)
+        if (same) return
+
+        this.$store.commit('sceneView/updateInput', next)
       },
       deep: true
     }
-  },
-  mounted(){
   },
   methods:{
     reGenerate: function(){
-      // perform a full replace so Scene.vue's full-scene watcher triggers
-      this.$store.commit("sceneView/replaceScene", {
-          drawOnScene: this.drawOnScene,
-          grid: this.grid,
-      });
+      this.$store.commit('sceneView/replaceScene', {
+        drawOnScene: this.drawOnScene,
+        grid: this.grid,
+        atmosphere: Object.assign({}, ((this.$store.state.sceneView || {}).atmosphere || {})),
+      })
       this.$store.commit('incrementSceneVersion')
-    }
-    ,applyFpsSettings(){
-      // broadcast new FPS settings so Scene/InputManager can pick them up
-      document.dispatchEvent(new CustomEvent('update-input-settings', { detail: this.fps }))
+    },
+    applyFpsSettings(){
+      this.$store.commit('sceneView/updateInput', this.fps)
     },
     resetSimulation(){
       this.$store.commit('simulation/reset')
     }
   },
-
-};
+}

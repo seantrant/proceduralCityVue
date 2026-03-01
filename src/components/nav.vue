@@ -11,6 +11,9 @@
       <li @click="openNav('layers')">
         <i class="fa fa-th-large" />
       </li>
+      <li @click="openNav('weather')">
+        <i class="fa fa-cloud" />
+      </li>
       <li @click="openNav('settings')">
         <i class="fa fa-cogs" />
       </li>

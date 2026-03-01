@@ -1,7 +1,8 @@
 const defaultNavItems = () => ([
-  { name: 'todo', open: false },
-  { name: 'camera', open: false },
-  { name: 'layers', open: false },
+  { name: 'todo', open: true },
+  { name: 'camera', open: true },
+  { name: 'layers', open: true },
+    { name: 'weather', open: true },
   { name: 'settings', open: true }
 ])
 

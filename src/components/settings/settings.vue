@@ -10,7 +10,7 @@
         <li class="panel-row">
           <span class="panel-key">Grid Size</span>
           <input
-            v-model="grid.gridSize"
+            v-model.number="grid.gridSize"
             placeholder="8"
           >
         </li>
@@ -37,6 +37,13 @@
           <span class="panel-key">Buildings</span>
           <input
             v-model="drawOnScene.buildings"
+            type="checkbox"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Roof lights</span>
+          <input
+            v-model="drawOnScene.roofLights"
             type="checkbox"
           >
         </li>

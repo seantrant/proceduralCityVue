@@ -75,8 +75,7 @@ export default {
   },
   methods:{
     requestPointerLock(){
-      // ask the scene to request pointer lock on the canvas
-      document.dispatchEvent(new CustomEvent('request-pointer-lock'))
+      this.$store.commit('sceneView/requestPointerLock')
     },
     _onPointerLockChange(){
       this.pointerLocked = document.pointerLockElement !== null

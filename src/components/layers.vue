@@ -15,6 +15,13 @@
           >
         </li>
         <li class="panel-row">
+          <span class="panel-key">Roof lights</span>
+          <input
+            v-model="showRoofLights"
+            type="checkbox"
+          >
+        </li>
+        <li class="panel-row">
           <span class="panel-key">Grid layout</span>
           <input
             v-model="showGrid"
@@ -40,6 +47,7 @@ export default {
     const scene = this.$store.state.sceneView || {}
     return {
       showBuildings: !!(scene.drawOnScene && scene.drawOnScene.buildings),
+      showRoofLights: !!(scene.drawOnScene && scene.drawOnScene.roofLights),
       showGrid: !!(scene.drawOnScene && scene.drawOnScene.gridLayout),
       showFloor: !!(scene.drawOnScene && scene.drawOnScene.floor)
     }
@@ -61,6 +69,7 @@ export default {
   },
   watch: {
     showBuildings(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { buildings: !!newVal }) },
+    showRoofLights(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { roofLights: !!newVal }) },
     showGrid(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { gridLayout: !!newVal }) },
     showFloor(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { floor: !!newVal }) }
   }

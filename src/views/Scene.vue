@@ -5,6 +5,7 @@
     <appCamera />
     <appLayers />
     <appSettings />
+    <appWeather />
     <mini-map
       ref="miniMap"
       :grid-array="gridArray"
@@ -34,19 +35,35 @@ import appTodo from '@/components/todo/todo.vue'
 import appCamera from '@/components/camera'
 import appLayers from '@/components/layers'
 import appSettings from '@/components/settings/settings.vue'
+import appWeather from '@/components/weather.vue'
 import miniMap from '@/components/miniMap.vue'
-import UserInput from '@/utils/userInput.js'
 import GridSetup from '@/utils/gridSetup.js'
 import {
-  rebuildBuildings,
-  rebuildFloor,
-  rebuildGridLayout,
-  setGroupVisibility,
-} from '@/composables/useSceneGroups'
+  drawScene as drawSceneComposable,
+  handleDrawOnSceneChange as handleDrawOnSceneChangeComposable,
+  handleGridChange as handleGridChangeComposable,
+  drawGridLayout as drawGridLayoutComposable,
+  drawGridBuildings as drawGridBuildingsComposable,
+  createAndDrawFloor as createAndDrawFloorComposable,
+} from '@/composables/useSceneDrawing'
+import {
+  disposeSkyBackgroundTexture as disposeSkyBackgroundTextureComposable,
+  createSkyBackground as createSkyBackgroundComposable,
+  ensureSkyDome as ensureSkyDomeComposable,
+  applyAtmosphere as applyAtmosphereComposable,
+} from '@/composables/useSceneAtmosphere'
+import {
+  setUpRenderer as setUpRendererComposable,
+  setUpCamera as setUpCameraComposable,
+  setupControls as setupControlsComposable,
+  disposeRendererAndScene,
+} from '@/composables/useSceneBootstrap'
 import {
   createCameraAnimation,
   stepCameraAnimation,
 } from '@/composables/useCameraAnimation'
+import { animateSceneFrame } from '@/composables/useSceneRuntimeLoop'
+import { buildSceneStoreWatchers } from '@/composables/useSceneStoreWatchers'
 
 export default {
   name: 'Scene',
@@ -56,6 +73,7 @@ export default {
     appCamera,
     appLayers,
     appSettings,
+    appWeather,
     miniMap,
   },
   data() {
@@ -78,6 +96,7 @@ export default {
 
       drawOnScene: Object.assign({}, this.$store.state.sceneView.drawOnScene || {}),
       grid: Object.assign({}, this.$store.state.sceneView.grid || {}),
+      atmosphere: Object.assign({}, this.$store.state.sceneView.atmosphere || {}),
       gridArray: [],
 
       gridSetup: null,
@@ -89,64 +108,31 @@ export default {
       pointerLocked: false,
       tmpDirVec: markRaw(new Three.Vector3()),
       tmpLookVec: markRaw(new Three.Vector3()),
+      lastMiniMapUpdateAt: 0,
+      miniMapUpdateIntervalMs: 80,
+      miniMapMoveThresholdSq: 0.01,
+      miniMapTurnThresholdDot: 0.9992,
+      lastMiniMapPos: markRaw(new Three.Vector3(Number.NaN, Number.NaN, Number.NaN)),
+      lastMiniMapDir: markRaw(new Three.Vector3(0, 0, 0)),
+      skyBackgroundTexture: null,
+      skyDomeName: 'skyDome',
     }
   },
-  watch: {
-    '$store.state.sceneVersion': {
-      handler() {
-      // reset scene then rebuild - clean up previous resources first
-      if(this.scene) this.disposeObject(this.scene)
-      this.scene = null
-      this.scene = markRaw(new Three.Scene())
-
-      const storeScene = this.$store.state.sceneView || {}
-      this.drawOnScene = Object.assign({}, storeScene.drawOnScene || {})
-      this.grid = Object.assign({}, storeScene.grid || {})
-
-      this.gridArray = this.gridSetup.createNewGrid()
-      this.drawScene(this.gridArray)
-      }
-    },
-    // granular watcher for incremental draw setting changes
-    '$store.state.sceneView.drawOnScene': {
-      handler(newVal) {
-        this.drawOnScene = Object.assign({}, newVal || {})
-        this.handleDrawOnSceneChange(newVal)
-      },
-      deep: true
-    },
-    // granular watcher for grid config changes
-    '$store.state.sceneView.grid': {
-      handler(newVal, oldVal) {
-        this.grid = Object.assign({}, newVal || {})
-        this.handleGridChange(newVal, oldVal)
-      },
-      deep: true
-    }
-    ,
-    '$store.state.sceneView.camera': {
-      handler(newVal){
-        if(newVal && newVal.helicopter){
-          this.startOrbit()
-        } else {
-          this.stopOrbit()
-        }
-      },
-      deep: true
-    }
-  },
+  watch: buildSceneStoreWatchers(),
   mounted() {
     this.gridSetup = new GridSetup({store: this.$store})
 
     const storeScene = this.$store.state.sceneView || {}
     this.drawOnScene = Object.assign({}, storeScene.drawOnScene || {})
     this.grid = Object.assign({}, storeScene.grid || {})
+    this.atmosphere = Object.assign({}, storeScene.atmosphere || {})
 
     this.$store.commit('simulation/reset')
     this.$store.commit('simulation/setRunning', true)
 
     this.setUpRenderer()
     this.setUpCamera();
+    this.applyAtmosphere()
     this.updateFov();
 
     this.gridArray = this.gridSetup.createNewGrid()
@@ -154,25 +140,13 @@ export default {
 
     this.setupControls();
 
-    // listen for UI requests to request pointer lock
-    this._onRequestPointerLock = () => {
-      if(this.renderer && this.renderer.domElement && this.renderer.domElement.requestPointerLock){
-        try{ this.renderer.domElement.requestPointerLock() }catch(e){ void e }
-      }
+    const inputSettings = Object.assign({}, storeScene.input || {})
+    if(this.input){
+      if(typeof inputSettings.mouseSensitivity === 'number') this.input.mouseSensitivity = inputSettings.mouseSensitivity
+      if(typeof inputSettings.moveSpeed === 'number') this.input.moveSpeed = inputSettings.moveSpeed
+      if(typeof inputSettings.acceleration === 'number') this.input.acceleration = inputSettings.acceleration
+      if(typeof inputSettings.friction === 'number') this.input.friction = inputSettings.friction
     }
-    document.addEventListener('request-pointer-lock', this._onRequestPointerLock)
-
-    // listen for settings updates
-    this._onUpdateInputSettings = (e) => {
-      if(this.input && e && e.detail){
-        const s = e.detail
-        if(typeof s.mouseSensitivity === 'number') this.input.mouseSensitivity = s.mouseSensitivity
-        if(typeof s.moveSpeed === 'number') this.input.moveSpeed = s.moveSpeed
-        if(typeof s.acceleration === 'number') this.input.acceleration = s.acceleration
-        if(typeof s.friction === 'number') this.input.friction = s.friction
-      }
-    }
-    document.addEventListener('update-input-settings', this._onUpdateInputSettings)
 
     // show on-screen hint when pointer lock is active
     this._onPointerLockChangeForHint = () => {
@@ -195,79 +169,49 @@ export default {
 
   beforeUnmount(){
     this.$store.commit('simulation/setRunning', false)
-    document.removeEventListener('request-pointer-lock', this._onRequestPointerLock)
-    document.removeEventListener('update-input-settings', this._onUpdateInputSettings)
     document.removeEventListener('pointerlockchange', this._onPointerLockChangeForHint)
     window.removeEventListener('resize', this._onResize)
-    if(this.input && typeof this.input.disconnect === 'function') this.input.disconnect()
     // stop animation loop
     if(this._rafId) cancelAnimationFrame(this._rafId)
-    // dispose renderer and scene resources
-    if(this.renderer && typeof this.renderer.dispose === 'function'){
-      try{ this.renderer.dispose(); if(this.renderer.forceContextLoss) this.renderer.forceContextLoss() }catch(e){ void e }
-    }
-    if(this.scene) this.disposeObject(this.scene)
+    disposeRendererAndScene(this, {
+      disposeSkyBackgroundTexture: disposeSkyBackgroundTextureComposable,
+    })
   },
   methods: {
 
-    drawScene(arrayOfGrids){
-      if(this.drawOnScene.buildings){
-        this.drawGridBuildings(arrayOfGrids)
-      }
-      if(this.drawOnScene.gridLayout){
-        this.drawGridLayout(arrayOfGrids)
-      }
-      if(this.drawOnScene.floor){
-        this.createAndDrawFloor();
-      }
-      this.renderScene()
+    disposeSkyBackgroundTexture(){
+      disposeSkyBackgroundTextureComposable(this)
     },
 
-    handleDrawOnSceneChange(newVal) {
-      setGroupVisibility(this.scene, newVal)
+    createSkyBackground(topHex, bottomHex){
+      createSkyBackgroundComposable(this, topHex, bottomHex)
+    },
+
+    ensureSkyDome(topHex, bottomHex){
+      ensureSkyDomeComposable(this, topHex, bottomHex)
+    },
+
+    applyAtmosphere(){
+      applyAtmosphereComposable(this)
+    },
+
+    drawScene(arrayOfGrids){
+      drawSceneComposable(this, arrayOfGrids)
+    },
+
+    handleDrawOnSceneChange(newVal, oldVal) {
+      handleDrawOnSceneChangeComposable(this, newVal, oldVal)
     },
 
     handleGridChange(newGrid, oldGrid) {
-      if(!oldGrid || !newGrid || !this.scene) return
-      // structural change like gridSize -> recreate only grid group
-      if(newGrid.gridSize !== oldGrid.gridSize){
-        this.gridArray = this.gridSetup.createNewGrid()
-        if(this.drawOnScene && this.drawOnScene.gridLayout) this.drawGridLayout(this.gridArray)
-        if(this.drawOnScene && this.drawOnScene.buildings) this.drawGridBuildings(this.gridArray)
-        if(this.drawOnScene && this.drawOnScene.floor) this.createAndDrawFloor()
-        this.renderScene()
-      }
-      // non structural changes (e.g. flags) can be handled via handleDrawOnSceneChange
+      handleGridChangeComposable(this, newGrid, oldGrid)
     },
 
     drawGridLayout(arrayOfGrids){
-      if(!this.scene) return
-      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
-      const spacing = (this.grid && this.grid.spacing) || 1
-      const halfExtent = ((gridSize - 1) / 2) * spacing
-      rebuildGridLayout({
-        scene: this.scene,
-        arrayOfGrids,
-        spacing,
-        halfExtent,
-        createBox: this.createBox,
-        disposeObject: this.disposeObject,
-      })
+      drawGridLayoutComposable(this, arrayOfGrids)
     },
     drawGridBuildings(arrayOfGrids){
-      if(!this.scene) return
-      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
-      const spacing = (this.grid && this.grid.spacing) || 1
-      const halfExtent = ((gridSize - 1) / 2) * spacing
-      rebuildBuildings({
-        scene: this.scene,
-        arrayOfGrids,
-        spacing,
-        halfExtent,
-        createBox: this.createBox,
-        createBoxEdges: this.createBoxEdges,
-        disposeObject: this.disposeObject,
-      })
+      drawGridBuildingsComposable(this, arrayOfGrids)
     },
 
     // getGridWithCoords(x, y){
@@ -277,57 +221,16 @@ export default {
     // },
 
     setUpRenderer:function(){
-      this.container = document.getElementById('container');
-      this.renderer = markRaw(new Three.WebGLRenderer({antialias: true, alpha: true}));
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-      this.renderer.setSize(Math.max(1, this.container.clientWidth-100), Math.max(1, this.container.clientHeight-100));
-      this.renderer.setClearColor (0x000000, 0);
-      this.container.appendChild(this.renderer.domElement);
+      setUpRendererComposable(this)
     },
     createAndDrawFloor: function() {
-      if(!this.scene) return
-      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
-      const spacing = (this.grid && this.grid.spacing) || 1
-      rebuildFloor({
-        scene: this.scene,
-        gridSize,
-        spacing,
-        disposeObject: this.disposeObject,
-      })
+      createAndDrawFloorComposable(this)
     },
     setUpCamera: function(){
-      let fov = 70;
-      let aspect = this.container.clientWidth/this.container.clientHeight;  // the canvas default
-      let near = 0.1;
-      let far = 500000;
-      this.camera = markRaw(new Three.PerspectiveCamera(fov, aspect, near, far));
-      // center camera over the scene and look at origin
-      const gridSize = (this.grid && this.grid.gridSize) || (this.gridSetup && this.gridSetup.grid && this.gridSetup.grid.gridSize) || 8
-      const spacing = (this.grid && this.grid.spacing) || 1
-      const halfExtent = ((gridSize - 1) / 2) * spacing
-      this.camera.position.set(0, 4.5, halfExtent + 2)
-      this.camera.lookAt(new Three.Vector3(0,0,0))
+      setUpCameraComposable(this)
     },
-    createBoxEdges: function (l, h, w){ //shape class
-      let geometry = new Three.BoxGeometry( l, h, w );
-      let edge = new Three.EdgesGeometry(geometry)
-      let boxEdges = new Three.LineSegments(edge,new Three.LineBasicMaterial({color:0x00ff00}))
-      return boxEdges
-    },
-    createBox: function(l, h, w, color = 0xD3D3D3, wireframe = true){ // shape class
-      let geometry = new Three.BoxGeometry( l, h, w );
-      let material = new Three.MeshBasicMaterial( { color: color, wireframe: wireframe } );
-      let box = new Three.Mesh( geometry, material );
-      return box
-    },
-
     setupControls(){
-      // create input manager and connect it to the renderer DOM element
-      this.input = new UserInput({ camera: this.camera })
-      // connect to renderer.domElement so pointer lock can be requested on click
-      if(this.renderer && this.renderer.domElement){
-        this.input.connect(this.renderer.domElement)
-      }
+      setupControlsComposable(this)
     },
 
     startOrbit(){
@@ -384,70 +287,7 @@ export default {
     },
 
     _animate(now){
-      const deltaMs = now - (this.lastTime || now)
-      const delta = Math.min(0.05, deltaMs / 1000) // clamp delta to avoid big jumps
-      this.lastTime = now
-
-      const simulationState = this.$store.state.simulation || {}
-      if(simulationState.running){
-        const speedMultiplier = Number(simulationState.speedMultiplier) || 1
-        this.simulationAccumulator += Math.max(0, deltaMs) * speedMultiplier
-        const maxTicksPerFrame = 8
-        let ticksProcessed = 0
-        while(
-          this.simulationAccumulator >= this.simulationStepMs &&
-          ticksProcessed < maxTicksPerFrame &&
-          (this.$store.state.simulation || {}).running
-        ){
-          this.simulationAccumulator -= this.simulationStepMs
-          this.$store.commit('simulation/incrementTick')
-          ticksProcessed += 1
-        }
-        if(this.simulationAccumulator > this.simulationStepMs * maxTicksPerFrame){
-          this.simulationAccumulator = this.simulationStepMs * maxTicksPerFrame
-        }
-      }
-
-      if(this.cameraOrbiting){
-        const t = (now || performance.now()) / 1000
-        const angle = t * this.orbitSpeed
-        const r = this.orbitRadius
-        const y = this.orbitAltitude
-        this.camera.position.x = Math.cos(angle) * r
-        this.camera.position.z = Math.sin(angle) * r
-        this.camera.position.y = y
-        this.tmpLookVec.set(0, 0, 0)
-        this.camera.lookAt(this.tmpLookVec)
-      } else {
-        if(this.cameraAnimation){
-          // camera is animating; skip input updates this frame
-        } else {
-          if(this.input && typeof this.input.update === 'function'){
-            this.input.update(delta)
-          }
-        }
-      }
-
-      // process camera animation if active
-      if(this.cameraAnimation){
-        try{
-          const result = stepCameraAnimation(this.camera, this.cameraAnimation, now, this.tmpLookVec)
-          if(result.done){
-            this.cameraAnimation = null
-          }
-        }catch(e){ void e }
-      }
-
-      if(!this.renderer || !this.scene || !this.camera) return
-      this.renderer.render(this.scene, this.camera)
-      // update mini-map with current camera position and direction
-      try{
-        this.camera.getWorldDirection(this.tmpDirVec)
-        if(this.$refs && this.$refs.miniMap && typeof this.$refs.miniMap.updateCamera === 'function'){
-          this.$refs.miniMap.updateCamera(this.camera.position, this.tmpDirVec)
-        }
-      }catch(e){ void e }
-      this._rafId = requestAnimationFrame(this._animate)
+      animateSceneFrame(this, now, { stepCameraAnimation })
     },
     // traverse an Object3D and dispose geometries, materials, and textures
     disposeObject(obj){
