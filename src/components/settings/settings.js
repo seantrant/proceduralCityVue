@@ -3,11 +3,11 @@ export default {
   data() {
     const scene = this.$store.state.sceneView || {}
     return {
-      isSyncingDrawOnScene: 0,
       isSyncingGrid: 0,
       isSyncingInput: 0,
-      drawOnScene: Object.assign({}, scene.drawOnScene || {}),
+      isSyncingTraffic: 0,
       grid: Object.assign({}, scene.grid || {}),
+      traffic: Object.assign({}, scene.trafficConfig || {}),
       fps: Object.assign({}, scene.input || {
         mouseSensitivity: 0.0025,
         moveSpeed: 5.0,
@@ -30,38 +30,8 @@ export default {
         '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
       }
     },
-    simulationTick () {
-      return ((this.$store.state.simulation || {}).tick) || 0
-    },
-    simulationRunning: {
-      get() {
-        return !!(((this.$store.state.simulation || {}).running))
-      },
-      set(value) {
-        this.$store.commit('simulation/setRunning', !!value)
-      }
-    },
-    simulationSpeed: {
-      get() {
-        const speed = ((this.$store.state.simulation || {}).speedMultiplier)
-        return Number(speed) || 1
-      },
-      set(value) {
-        this.$store.commit('simulation/setSpeedMultiplier', value)
-      }
-    }
   },
   watch: {
-    '$store.state.sceneView.drawOnScene': {
-      handler(newVal) {
-        this.isSyncingDrawOnScene++
-        this.drawOnScene = Object.assign({}, newVal || {})
-        this.$nextTick(() => {
-          this.isSyncingDrawOnScene--
-        })
-      },
-      deep: true
-    },
     '$store.state.sceneView.grid': {
       handler(newVal) {
         this.isSyncingGrid++
@@ -82,18 +52,11 @@ export default {
       },
       deep: true
     },
-    drawOnScene: {
+    '$store.state.sceneView.trafficConfig': {
       handler(newVal) {
-        if (this.isSyncingDrawOnScene) return
-        const current = (this.$store.state.sceneView || {}).drawOnScene || {}
-        const next = newVal || {}
-        const same =
-          !!next.floor === !!current.floor &&
-          !!next.gridLayout === !!current.gridLayout &&
-          !!next.buildings === !!current.buildings &&
-          !!next.roofLights === !!current.roofLights
-        if (same) return
-        this.$store.commit('sceneView/updateDrawOnScene', next)
+        this.isSyncingTraffic++
+        this.traffic = Object.assign({}, newVal || {})
+        this.$nextTick(() => { this.isSyncingTraffic-- })
       },
       deep: true
     },
@@ -147,12 +110,19 @@ export default {
         this.$store.commit('sceneView/updateInput', next)
       },
       deep: true
+    },
+    traffic: {
+      handler(newVal) {
+        if (this.isSyncingTraffic) return
+        // do not auto-commit; user clicks Apply
+      },
+      deep: true
     }
   },
   methods:{
     reGenerate: function(){
       this.$store.commit('sceneView/replaceScene', {
-        drawOnScene: this.drawOnScene,
+        drawOnScene: (this.$store.state.sceneView || {}).drawOnScene,
         grid: this.grid,
         atmosphere: Object.assign({}, ((this.$store.state.sceneView || {}).atmosphere || {})),
       })
@@ -161,8 +131,15 @@ export default {
     applyFpsSettings(){
       this.$store.commit('sceneView/updateInput', this.fps)
     },
-    resetSimulation(){
-      this.$store.commit('simulation/reset')
-    }
+    applyTrafficSettings(){
+      const payload = {
+        density: Number(this.traffic.density) || 0,
+        minSpeed: Number(this.traffic.minSpeed) || 0,
+        maxSpeed: Number(this.traffic.maxSpeed) || 0,
+      }
+      this.$store.commit('sceneView/updateScene', { trafficConfig: payload })
+      // bump scene version so drawing will recreate traffic
+      this.$store.commit('incrementSceneVersion')
+    },
   },
 }

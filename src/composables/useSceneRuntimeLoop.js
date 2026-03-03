@@ -1,3 +1,5 @@
+import { stepTrafficFrame } from '@/composables/useTraffic'
+
 export function animateSceneFrame(vm, now, options = {}) {
   const { stepCameraAnimation } = options
 
@@ -99,6 +101,22 @@ export function animateSceneFrame(vm, now, options = {}) {
       sprite.scale.set(nextScale, nextScale, 1)
     })
   }
+
+  const streetLightGroup = vm.scene.getObjectByName && vm.scene.getObjectByName('streetLightGroup')
+  if (streetLightGroup && streetLightGroup.visible && streetLightGroup.userData) {
+    const sprites = streetLightGroup.userData.streetSprites || []
+    sprites.forEach((sprite) => {
+      if (!sprite || !sprite.userData || !sprite.material) return
+      const baseOpacity = Math.max(0, Number(sprite.userData.baseOpacity) || 0.95)
+      sprite.material.opacity = baseOpacity
+      const baseScale = Number(sprite.userData.baseScale) || 0.1
+      sprite.scale.set(baseScale, baseScale, 1)
+    })
+  }
+
+  try {
+    stepTrafficFrame(vm, now)
+  } catch (e) { void e }
 
   vm.renderer.render(vm.scene, vm.camera)
 

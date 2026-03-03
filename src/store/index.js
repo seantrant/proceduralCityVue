@@ -10,6 +10,7 @@ import {
   defaultDrawOnScene,
   defaultGridConfig,
   defaultInputConfig,
+  defaultTrafficConfig,
 } from '@/types/city'
 
 export default createStore({
@@ -59,6 +60,7 @@ export default createStore({
         grid: { ...defaultGridConfig },
         camera: { ...defaultCameraConfig },
         atmosphere: { ...defaultAtmosphereConfig },
+        trafficConfig: { ...defaultTrafficConfig },
         input: { ...defaultInputConfig },
       }
       const incoming = payload || {}
@@ -67,6 +69,7 @@ export default createStore({
         grid: Object.assign({}, defaults.grid, incoming.grid || {}),
         camera: Object.assign({}, defaults.camera, incoming.camera || {}),
         atmosphere: Object.assign({}, defaults.atmosphere, incoming.atmosphere || {}),
+        trafficConfig: Object.assign({}, defaults.trafficConfig, incoming.trafficConfig || {}),
         input: Object.assign({}, defaults.input, incoming.input || {}),
         pointerLockRequestToken: 0,
       }

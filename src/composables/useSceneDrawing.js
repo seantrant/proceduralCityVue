@@ -3,8 +3,10 @@ import {
   rebuildFloor,
   rebuildGridLayout,
   rebuildRoads,
+  rebuildStreetLights,
   setGroupVisibility,
 } from '@/composables/useSceneGroups'
+import { createTraffic } from '@/composables/useTraffic'
 
 export function drawScene(vm, arrayOfGrids) {
   if(vm.drawOnScene.buildings){
@@ -79,13 +81,39 @@ export function drawGridLayout(vm, arrayOfGrids) {
     halfExtent,
     disposeObject: vm.disposeObject,
   })
-  rebuildRoads({
+    try {
+      rebuildRoads({
     scene: vm.scene,
     arrayOfGrids,
     spacing,
     halfExtent,
     disposeObject: vm.disposeObject,
   })
+      const roadGroup = vm.scene && vm.scene.getObjectByName && vm.scene.getObjectByName('roadGroup')
+      try {
+        const trafficConfig = (vm.$store && vm.$store.state && vm.$store.state.sceneView && vm.$store.state.sceneView.trafficConfig) || {}
+        if (vm.drawOnScene && vm.drawOnScene.traffic) {
+          createTraffic({
+            scene: vm.scene,
+            roadGroup,
+            disposeObject: vm.disposeObject,
+            options: trafficConfig,
+          })
+        }
+      } catch (e) { void e }
+    } catch (e) { void e }
+  // street lights (sprite-based)
+  try {
+    rebuildStreetLights({
+      scene: vm.scene,
+      arrayOfGrids,
+      spacing,
+      halfExtent,
+      disposeObject: vm.disposeObject,
+    })
+  } catch (e) {
+    void e
+  }
 }
 
 export function drawGridBuildings(vm, arrayOfGrids) {

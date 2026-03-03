@@ -4,6 +4,7 @@ import {
   defaultDrawOnScene,
   defaultGridConfig,
   defaultInputConfig,
+  defaultTrafficConfig,
 } from '@/types/city'
 
 export const buildDefaultSceneView = () => ({
@@ -12,6 +13,7 @@ export const buildDefaultSceneView = () => ({
   camera: { ...defaultCameraConfig },
   atmosphere: { ...defaultAtmosphereConfig },
   input: { ...defaultInputConfig },
+  trafficConfig: { ...defaultTrafficConfig },
   pointerLockRequestToken: 0,
 })
 
@@ -50,6 +52,7 @@ export default {
       state.grid = Object.assign({}, base.grid, incoming.grid || {})
       state.camera = Object.assign({}, base.camera, incoming.camera || {})
       state.atmosphere = Object.assign({}, base.atmosphere, incoming.atmosphere || {})
+      state.trafficConfig = Object.assign({}, base.trafficConfig, incoming.trafficConfig || {})
       state.input = Object.assign({}, base.input, incoming.input || {})
       state.pointerLockRequestToken = base.pointerLockRequestToken
     }

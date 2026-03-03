@@ -15,48 +15,25 @@
           >
         </li>
 
-        <hr>
-        <li class="panel-section">
-          Show on Scene
+        
+        <li class="panel-row panel-section">
+          Traffic Settings
         </li>
         <li class="panel-row">
-          <span class="panel-key">Floor</span>
-          <input
-            v-model="drawOnScene.floor"
-            type="checkbox"
-          >
+          <span class="panel-key">Density</span>
+          <input v-model.number="traffic.density" step="0.1" min="0.1">
         </li>
         <li class="panel-row">
-          <span class="panel-key">Grid Layout</span>
-          <input
-            v-model="drawOnScene.gridLayout"
-            type="checkbox"
-          >
+          <span class="panel-key">Min speed</span>
+          <input v-model.number="traffic.minSpeed" step="0.1" min="0">
         </li>
         <li class="panel-row">
-          <span class="panel-key">Buildings</span>
-          <input
-            v-model="drawOnScene.buildings"
-            type="checkbox"
-          >
+          <span class="panel-key">Max speed</span>
+          <input v-model.number="traffic.maxSpeed" step="0.1" min="0">
         </li>
-        <li class="panel-row">
-          <span class="panel-key">Roof lights</span>
-          <input
-            v-model="drawOnScene.roofLights"
-            type="checkbox"
-          >
-        </li>
-
-
         <li class="panel-row panel-row-action">
-          <span class="panel-key">Scene</span>
-          <button
-            class="generateButton"
-            @click="reGenerate()"
-          >
-            Generate
-          </button>
+          <span class="panel-key">Traffic</span>
+          <button class="generateButton" @click="applyTrafficSettings()">Apply</button>
         </li>
         <hr>
         <li class="panel-section">
@@ -103,38 +80,7 @@
             Apply
           </button>
         </li>
-        <hr>
-        <li class="panel-section">
-          Simulation
-        </li>
-        <li class="panel-row">
-          <span class="panel-key">Running</span>
-          <input
-            v-model="simulationRunning"
-            type="checkbox"
-          >
-        </li>
-        <li class="panel-row">
-          <span class="panel-key">Speed</span>
-          <input
-            v-model.number="simulationSpeed"
-            step="0.25"
-            min="0.25"
-          >
-        </li>
-        <li class="panel-row">
-          <span class="panel-key">Tick</span>
-          <strong class="sim-value">{{ simulationTick }}</strong>
-        </li>
-        <li class="panel-row panel-row-action">
-          <span class="panel-key">Simulation</span>
-          <button
-            class="generateButton"
-            @click="resetSimulation()"
-          >
-            Reset
-          </button>
-        </li>
+        
       </ul>
     </aside>
   </transition>

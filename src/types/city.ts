@@ -16,6 +16,7 @@ export interface DrawOnScene {
   buildings: boolean
   floor: boolean
   roofLights: boolean
+  traffic: boolean
 }
 
 export interface GridConfig {
@@ -46,6 +47,7 @@ export interface SceneViewState {
   camera: CameraConfig
   atmosphere: AtmosphereConfig
   input: InputConfig
+  trafficConfig: TrafficConfig
   pointerLockRequestToken: number
 }
 
@@ -59,6 +61,7 @@ export const defaultDrawOnScene: DrawOnScene = {
   buildings: true,
   floor: true,
   roofLights: true,
+  traffic: true,
 }
 
 export const defaultGridConfig: GridConfig = {
@@ -81,4 +84,16 @@ export const defaultInputConfig: InputConfig = {
   moveSpeed: 5.0,
   acceleration: 30.0,
   friction: 10.0,
+}
+
+export interface TrafficConfig {
+  density: number
+  minSpeed: number
+  maxSpeed: number
+}
+
+export const defaultTrafficConfig: TrafficConfig = {
+  density: 100,
+  minSpeed: 0.1,
+  maxSpeed: 0.5,
 }

@@ -2,11 +2,22 @@ import * as Three from 'three'
 import { markRaw } from 'vue'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
+export const MINI_MAP_BUILDING_FILL = '#6a0dad'
+export const MINI_MAP_BUILDING_STROKE = '#ffffff'
+export const MINI_MAP_ROAD_FILL = '#121212'
+export const MINI_MAP_JUNCTION_FILL = '#6a0000'
+
 const ROAD_BASE_Y = 0.106
 const ROAD_LINE_Y = 0.112
 const ROAD_EDGE_INSET_RATIO = 0.14
 const ROAD_CENTER_DASH_RATIO = 0.2
 const ROAD_CENTER_GAP_RATIO = 0.18
+
+const STREET_LIGHT_SIDE_OFFSET_RATIO = 0.28
+const STREET_LIGHT_CORE_SCALE = 0.12
+const STREET_LIGHT_HALO_SCALE = 0.32
+const STREET_LIGHT_PERIOD_SEC = 4.0
+const STREET_LIGHT_SPACING_CELLS = 3
 
 export function ensureNamedGroup(scene, groupName, disposeObject) {
   let group = scene.getObjectByName && scene.getObjectByName(groupName)
@@ -45,6 +56,10 @@ export function setGroupVisibility(scene, drawOnScene) {
       && drawOnScene.buildings
       && drawOnScene.roofLights
     )
+  }
+  const trafficGroup = scene.getObjectByName && scene.getObjectByName('trafficGroup')
+  if (trafficGroup) {
+    trafficGroup.visible = !!(drawOnScene && drawOnScene.traffic !== false)
   }
 }
 
@@ -93,9 +108,11 @@ export function rebuildGridLayout({ scene, arrayOfGrids, spacing, halfExtent, di
 
 export function rebuildRoads({ scene, arrayOfGrids, spacing, halfExtent, disposeObject }) {
   const roadGroup = ensureNamedGroup(scene, 'roadGroup', disposeObject)
+  // initialize userData container and clear any previous centrelines
+  roadGroup.userData = roadGroup.userData || {}
+  roadGroup.userData.centerSegments = []
   const roadMaterial = new Three.MeshBasicMaterial({ color: 0x121212, wireframe: false })
   const lineMaterial = new Three.LineBasicMaterial({ color: 0xffffff })
-  const centerLineMaterial = new Three.LineBasicMaterial({ color: 0xffffff })
   const baseParts = []
   const edgeLinePoints = []
   const centerLinePoints = []
@@ -204,11 +221,32 @@ export function rebuildRoads({ scene, arrayOfGrids, spacing, halfExtent, dispose
     roadGroup.add(edgeLines)
   }
 
+  // do not render a white center line on roads; but still expose center segments for traffic
   if (centerLinePoints.length) {
-    const centerGeometry = new Three.BufferGeometry()
-    centerGeometry.setAttribute('position', new Three.Float32BufferAttribute(centerLinePoints, 3))
-    const centerLines = new Three.LineSegments(centerGeometry, centerLineMaterial)
-    roadGroup.add(centerLines)
+    const centerSegments = []
+    for (let i = 0; i < centerLinePoints.length; i += 6) {
+      const x1 = centerLinePoints[i]
+      const y1 = centerLinePoints[i + 1]
+      const z1 = centerLinePoints[i + 2]
+      const x2 = centerLinePoints[i + 3]
+      const y2 = centerLinePoints[i + 4]
+      const z2 = centerLinePoints[i + 5]
+      const a = new Three.Vector3(x1, y1, z1)
+      const b = new Three.Vector3(x2, y2, z2)
+      const len = a.distanceTo(b)
+      // compute a left-perpendicular on the XZ plane for lane offsets
+      let perpLeft = new Three.Vector3(0, 0, 0)
+      if (len > 1e-6) {
+        const heading = new Three.Vector3().subVectors(b, a)
+        heading.y = 0
+        heading.normalize()
+        perpLeft = new Three.Vector3(-heading.z, 0, heading.x)
+        perpLeft.normalize()
+      }
+      const seg = { a, b, length: len, perpLeft, perpRight: perpLeft.clone().negate() }
+      centerSegments.push(seg)
+    }
+    roadGroup.userData.centerSegments = centerSegments
   }
 }
 
@@ -249,6 +287,36 @@ function createBeaconTexture() {
   gradient.addColorStop(0.22, 'rgba(255,120,120,0.92)')
   gradient.addColorStop(0.55, 'rgba(255,40,40,0.5)')
   gradient.addColorStop(1, 'rgba(255,0,0,0)')
+
+  ctx.clearRect(0, 0, size, size)
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, size, size)
+
+  const texture = new Three.CanvasTexture(canvas)
+  texture.needsUpdate = true
+  return texture
+}
+
+function createStreetLightTexture() {
+  const size = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  const gradient = ctx.createRadialGradient(
+    size * 0.5,
+    size * 0.5,
+    size * 0.04,
+    size * 0.5,
+    size * 0.5,
+    size * 0.5,
+  )
+  gradient.addColorStop(0, 'rgba(255,255,255,1)')
+  gradient.addColorStop(0.25, 'rgba(255,255,255,0.85)')
+  gradient.addColorStop(0.6, 'rgba(255,255,255,0.25)')
+  gradient.addColorStop(1, 'rgba(255,255,255,0)')
 
   ctx.clearRect(0, 0, size, size)
   ctx.fillStyle = gradient
@@ -530,6 +598,124 @@ export function rebuildBuildings({ scene, arrayOfGrids, spacing, halfExtent, dra
   roofLightGroup.userData = {
     beaconSprites,
     beaconTexture,
+  }
+}
+
+export function rebuildStreetLights({ scene, arrayOfGrids, spacing, halfExtent, disposeObject }) {
+  const streetLightGroup = ensureNamedGroup(scene, 'streetLightGroup', disposeObject)
+  // remove previous texture if any
+  if (
+    streetLightGroup.userData
+    && streetLightGroup.userData.lightTexture
+    && typeof streetLightGroup.userData.lightTexture.dispose === 'function'
+  ) {
+    try {
+      streetLightGroup.userData.lightTexture.dispose()
+    } catch (e) {
+      void e
+    }
+  }
+
+  streetLightGroup.visible = true
+
+  const lightTexture = createStreetLightTexture()
+  if (!lightTexture) {
+    streetLightGroup.userData = { streetSprites: [], lightTexture: null }
+    return
+  }
+
+  const coreMaterial = new Three.SpriteMaterial({
+    map: lightTexture,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+    blending: Three.AdditiveBlending,
+  })
+  const haloMaterial = new Three.SpriteMaterial({
+    map: lightTexture,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+    blending: Three.AdditiveBlending,
+  })
+
+  const sprites = []
+
+  const keyFor = (x, y) => `${x},${y}`
+  const gridByCoords = new Map()
+  const isDriveable = (grid) => !!grid && (grid.contents === 'road' || grid.contents === 'junction')
+  arrayOfGrids.forEach((g) => gridByCoords.set(keyFor(g.coords.x, g.coords.y), g))
+  const getNeighbor = (grid, dx, dy) => gridByCoords.get(keyFor(grid.coords.x + dx, grid.coords.y + dy))
+
+  arrayOfGrids.forEach((grid) => {
+    if (!isDriveable(grid)) return
+
+    const north = isDriveable(getNeighbor(grid, 0, -1))
+    const south = isDriveable(getNeighbor(grid, 0, 1))
+    const east = isDriveable(getNeighbor(grid, 1, 0))
+    const west = isDriveable(getNeighbor(grid, -1, 0))
+
+    // only place on straight runs (N-S or E-W)
+    const isVertical = north && south
+    const isHorizontal = east && west
+    if (!isVertical && !isHorizontal) return
+
+    // spacing by cell index
+    if (isVertical) {
+      if ((Math.abs(grid.coords.y) % STREET_LIGHT_SPACING_CELLS) !== 0) return
+    } else if (isHorizontal) {
+      if ((Math.abs(grid.coords.x) % STREET_LIGHT_SPACING_CELLS) !== 0) return
+    }
+
+    const x = grid.coords.x * spacing - halfExtent
+    const z = grid.coords.y * spacing - halfExtent
+
+    // alternate side placement
+    const index = isVertical ? Math.floor(grid.coords.y / STREET_LIGHT_SPACING_CELLS) : Math.floor(grid.coords.x / STREET_LIGHT_SPACING_CELLS)
+    const side = (Math.abs(index) % 2 === 0) ? -1 : 1
+    const sideOffset = spacing * STREET_LIGHT_SIDE_OFFSET_RATIO * side
+
+    const px = isVertical ? x + sideOffset : x
+    const pz = isHorizontal ? z + sideOffset : z
+
+    const coreSprite = new Three.Sprite(coreMaterial)
+    coreSprite.position.set(px, ROAD_LINE_Y + 0.02, pz)
+    coreSprite.scale.set(STREET_LIGHT_CORE_SCALE, STREET_LIGHT_CORE_SCALE, 1)
+    coreSprite.userData = {
+      baseScale: STREET_LIGHT_CORE_SCALE,
+      pulseScale: 0.12,
+      baseOpacity: 0.95,
+      pulsePeriod: STREET_LIGHT_PERIOD_SEC,
+      pulsePhaseNorm: Math.random(),
+      pulseSharpness: 2.2,
+      burstGap: 0.12,
+      pulseWidth: 0.08,
+    }
+    streetLightGroup.add(coreSprite)
+    sprites.push(coreSprite)
+
+    const haloSprite = new Three.Sprite(haloMaterial)
+    haloSprite.position.set(px, ROAD_LINE_Y + 0.02, pz)
+    haloSprite.scale.set(STREET_LIGHT_HALO_SCALE, STREET_LIGHT_HALO_SCALE, 1)
+    haloSprite.userData = {
+      baseScale: STREET_LIGHT_HALO_SCALE,
+      pulseScale: 0.22,
+      baseOpacity: 0.5,
+      pulsePeriod: STREET_LIGHT_PERIOD_SEC,
+      pulsePhaseNorm: Math.random(),
+      pulseSharpness: 2.2,
+      burstGap: 0.12,
+      pulseWidth: 0.08,
+    }
+    streetLightGroup.add(haloSprite)
+    sprites.push(haloSprite)
+  })
+
+  streetLightGroup.userData = {
+    streetSprites: sprites,
+    lightTexture,
   }
 }
 

@@ -13,6 +13,13 @@
 </template>
 
 <script>
+import {
+  MINI_MAP_BUILDING_FILL,
+  MINI_MAP_BUILDING_STROKE,
+  MINI_MAP_ROAD_FILL,
+  MINI_MAP_JUNCTION_FILL,
+} from '@/composables/useSceneGroups'
+
 export default {
   name: 'MiniMap',
   props: {
@@ -98,21 +105,21 @@ export default {
         const cy = h - gy
         if(g.contents === 'building'){
             if(this.drawOnScene && this.drawOnScene.buildings){
-              ctx.fillStyle = '#222222'
+              ctx.fillStyle = MINI_MAP_BUILDING_FILL
               const sz = Math.ceil(scale)
               ctx.fillRect(gx, cy, sz, sz)
-              ctx.strokeStyle = '#00ff00'
+              ctx.strokeStyle = MINI_MAP_BUILDING_STROKE
               ctx.lineWidth = 1
               ctx.strokeRect(gx + 0.5, cy + 0.5, sz - 1, sz - 1)
             }
           } else if(g.contents === 'road'){
           if(this.drawOnScene && this.drawOnScene.gridLayout){
-            ctx.fillStyle = '#BFBFBF'
+            ctx.fillStyle = MINI_MAP_ROAD_FILL
             ctx.fillRect(gx, cy, Math.ceil(scale), Math.ceil(scale))
           }
         } else if(g.contents === 'junction'){
           if(this.drawOnScene && this.drawOnScene.gridLayout){
-            ctx.fillStyle = '#8B0000'
+            ctx.fillStyle = MINI_MAP_JUNCTION_FILL
             ctx.fillRect(gx, cy, Math.ceil(scale), Math.ceil(scale))
           }
         }

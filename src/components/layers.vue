@@ -22,6 +22,13 @@
           >
         </li>
         <li class="panel-row">
+          <span class="panel-key">Traffic</span>
+          <input
+            v-model="showTraffic"
+            type="checkbox"
+          >
+        </li>
+        <li class="panel-row">
           <span class="panel-key">Grid layout</span>
           <input
             v-model="showGrid"
@@ -48,6 +55,7 @@ export default {
     return {
       showBuildings: !!(scene.drawOnScene && scene.drawOnScene.buildings),
       showRoofLights: !!(scene.drawOnScene && scene.drawOnScene.roofLights),
+      showTraffic: !!(scene.drawOnScene && scene.drawOnScene.traffic),
       showGrid: !!(scene.drawOnScene && scene.drawOnScene.gridLayout),
       showFloor: !!(scene.drawOnScene && scene.drawOnScene.floor)
     }
@@ -70,6 +78,7 @@ export default {
   watch: {
     showBuildings(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { buildings: !!newVal }) },
     showRoofLights(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { roofLights: !!newVal }) },
+    showTraffic(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { traffic: !!newVal }) },
     showGrid(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { gridLayout: !!newVal }) },
     showFloor(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { floor: !!newVal }) }
   }
