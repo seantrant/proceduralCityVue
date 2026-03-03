@@ -1,20 +1,20 @@
 module.exports = {
   lintOnSave: false,
   transpileDependencies: [],
-  chainWebpack: config => {
+  chainWebpack: (config) => {
     config.resolve.extensions
-      .merge(['.ts'])
+      .merge(['.ts']);
 
     config.module
       .rule('ts')
       .test(/\.ts$/)
       .use('babel-loader')
       .loader('babel-loader')
-      .end()
+      .end();
 
     // remove ProgressPlugin added by older vue-cli tooling to avoid
     // incompatibilities between plugin options and the installed webpack
     // version (prevents 'Progress Plugin Invalid Options' at runtime).
-    config.plugins.delete('progress')
-  }
-}
+    config.plugins.delete('progress');
+  },
+};

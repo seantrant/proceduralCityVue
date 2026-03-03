@@ -1,8 +1,6 @@
 export class BuildingContruction {
-
-  constructor(args){
-    this.camera = args.camera
+  constructor(args) {
+    this.camera = args.camera;
   }
-
 }
-export default BuildingContruction
+export default BuildingContruction;

@@ -27,11 +27,11 @@ export default {
   props: {
     // msg: String,
   },
-  methods:{
-    openNav(option){
-      this.$store.commit("nav/changeNav", option);
-    }
-  }
+  methods: {
+    openNav(option) {
+      this.$store.commit('nav/changeNav', option);
+    },
+  },
 };
 </script>
 

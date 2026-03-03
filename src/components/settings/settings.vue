@@ -15,7 +15,7 @@
           >
         </li>
 
-        
+
         <li class="panel-row panel-section">
           Traffic Settings
         </li>
@@ -80,7 +80,7 @@
             Apply
           </button>
         </li>
-        
+
       </ul>
     </aside>
   </transition>

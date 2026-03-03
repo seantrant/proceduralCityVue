@@ -14,9 +14,6 @@
         "src/*"
       ]
     },
-    "types": [
-      "webpack-env"
-    ],
     "skipLibCheck": true,
     "esModuleInterop": true,
     "lib": [

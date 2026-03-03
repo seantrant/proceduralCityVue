@@ -34,53 +34,53 @@ export default {
   name: 'Camera',
   data() {
     return {
-      pointerLocked: false
-    }
+      pointerLocked: false,
+    };
   },
   computed: {
-    openWindow () {
-      const item = (this.$store.state.nav.items || []).find(n => n.name === 'camera')
-      return !!(item && item.open)
+    openWindow() {
+      const item = (this.$store.state.nav.items || []).find(n => n.name === 'camera');
+      return !!(item && item.open);
     },
-    panelIndex () {
-      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open)
-      return openPanels.findIndex(n => n.name === 'camera')
+    panelIndex() {
+      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open);
+      return openPanels.findIndex(n => n.name === 'camera');
     },
-    panelStyle () {
+    panelStyle() {
       return {
-        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
-      }
+        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex,
+      };
     },
     cameraHelicopter: {
       get() {
-        const scene = this.$store.state.sceneView || {}
-        return !!(scene.camera && scene.camera.helicopter)
+        const scene = this.$store.state.sceneView || {};
+        return !!(scene.camera && scene.camera.helicopter);
       },
       set(val) {
-        this.$store.commit('sceneView/updateCamera', { helicopter: !!val })
-      }
-    }
+        this.$store.commit('sceneView/updateCamera', { helicopter: !!val });
+      },
+    },
   },
   watch: {
-    openWindow () {
+    openWindow() {
       // no-op watcher (avoid logging in production)
-    }
-  },
-  mounted(){
-    this.pointerLocked = document.pointerLockElement !== null
-    document.addEventListener('pointerlockchange', this._onPointerLockChange)
-  },
-  beforeUnmount(){
-    document.removeEventListener('pointerlockchange', this._onPointerLockChange)
-  },
-  methods:{
-    requestPointerLock(){
-      this.$store.commit('sceneView/requestPointerLock')
     },
-    _onPointerLockChange(){
-      this.pointerLocked = document.pointerLockElement !== null
-    }
-  }
+  },
+  mounted() {
+    this.pointerLocked = document.pointerLockElement !== null;
+    document.addEventListener('pointerlockchange', this._onPointerLockChange);
+  },
+  beforeUnmount() {
+    document.removeEventListener('pointerlockchange', this._onPointerLockChange);
+  },
+  methods: {
+    requestPointerLock() {
+      this.$store.commit('sceneView/requestPointerLock');
+    },
+    _onPointerLockChange() {
+      this.pointerLocked = document.pointerLockElement !== null;
+    },
+  },
 };
 </script>
 

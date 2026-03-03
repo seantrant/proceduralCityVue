@@ -51,38 +51,38 @@
 export default {
   name: 'Layers',
   data() {
-    const scene = this.$store.state.sceneView || {}
+    const scene = this.$store.state.sceneView || {};
     return {
       showBuildings: !!(scene.drawOnScene && scene.drawOnScene.buildings),
       showRoofLights: !!(scene.drawOnScene && scene.drawOnScene.roofLights),
       showTraffic: !!(scene.drawOnScene && scene.drawOnScene.traffic),
       showGrid: !!(scene.drawOnScene && scene.drawOnScene.gridLayout),
-      showFloor: !!(scene.drawOnScene && scene.drawOnScene.floor)
-    }
+      showFloor: !!(scene.drawOnScene && scene.drawOnScene.floor),
+    };
   },
   computed: {
-    openWindow () {
-      const item = (this.$store.state.nav.items || []).find(n => n.name === 'layers')
-      return !!(item && item.open)
+    openWindow() {
+      const item = (this.$store.state.nav.items || []).find(n => n.name === 'layers');
+      return !!(item && item.open);
     },
-    panelIndex () {
-      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open)
-      return openPanels.findIndex(n => n.name === 'layers')
+    panelIndex() {
+      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open);
+      return openPanels.findIndex(n => n.name === 'layers');
     },
-    panelStyle () {
+    panelStyle() {
       return {
-        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
-      }
-    }
+        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex,
+      };
+    },
   },
   watch: {
-    showBuildings(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { buildings: !!newVal }) },
-    showRoofLights(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { roofLights: !!newVal }) },
-    showTraffic(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { traffic: !!newVal }) },
-    showGrid(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { gridLayout: !!newVal }) },
-    showFloor(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { floor: !!newVal }) }
-  }
-}
+    showBuildings(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { buildings: !!newVal }); },
+    showRoofLights(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { roofLights: !!newVal }); },
+    showTraffic(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { traffic: !!newVal }); },
+    showGrid(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { gridLayout: !!newVal }); },
+    showFloor(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { floor: !!newVal }); },
+  },
+};
 </script>
 
 <style scoped lang="scss">

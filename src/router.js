@@ -6,7 +6,7 @@ const routes = [
     path: '/',
     name: 'scene',
     component: Scene,
-  }
+  },
 ];
 
 const router = createRouter({

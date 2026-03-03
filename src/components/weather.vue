@@ -50,65 +50,65 @@
 export default {
   name: 'Weather',
   data() {
-    const scene = this.$store.state.sceneView || {}
-    const atmosphere = scene.atmosphere || {}
+    const scene = this.$store.state.sceneView || {};
+    const atmosphere = scene.atmosphere || {};
     return {
       isSyncingFromStore: false,
       preset: (atmosphere.preset === 'dusk' || atmosphere.preset === 'night') ? atmosphere.preset : 'night',
       fogEnabled: !!atmosphere.fogEnabled,
       fogDensity: Number(atmosphere.fogDensity) || 0.0007,
-    }
+    };
   },
   computed: {
     openWindow() {
-      const item = (this.$store.state.nav.items || []).find(n => n.name === 'weather')
-      return !!(item && item.open)
+      const item = (this.$store.state.nav.items || []).find(n => n.name === 'weather');
+      return !!(item && item.open);
     },
     panelIndex() {
-      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open)
-      return openPanels.findIndex(n => n.name === 'weather')
+      const openPanels = (this.$store.state.nav.items || []).filter(n => n.open);
+      return openPanels.findIndex(n => n.name === 'weather');
     },
     panelStyle() {
       return {
-        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex
-      }
+        '--panel-index': this.panelIndex < 0 ? 0 : this.panelIndex,
+      };
     },
     fogDensityDisplay() {
-      return (Number(this.fogDensity) || 0).toFixed(4)
-    }
+      return (Number(this.fogDensity) || 0).toFixed(4);
+    },
   },
   watch: {
     '$store.state.sceneView.atmosphere': {
       handler(newVal) {
-        const next = newVal || {}
-        this.isSyncingFromStore = true
-        this.preset = (next.preset === 'dusk' || next.preset === 'night') ? next.preset : 'night'
-        this.fogEnabled = !!next.fogEnabled
-        this.fogDensity = Number(next.fogDensity) || 0.0007
+        const next = newVal || {};
+        this.isSyncingFromStore = true;
+        this.preset = (next.preset === 'dusk' || next.preset === 'night') ? next.preset : 'night';
+        this.fogEnabled = !!next.fogEnabled;
+        this.fogDensity = Number(next.fogDensity) || 0.0007;
         this.$nextTick(() => {
-          this.isSyncingFromStore = false
-        })
+          this.isSyncingFromStore = false;
+        });
       },
-      deep: true
+      deep: true,
     },
     preset(newVal) {
-      if (this.isSyncingFromStore) return
-      const nextPreset = newVal === 'dusk' ? 'dusk' : 'night'
-      this.$store.commit('sceneView/updateAtmosphere', { preset: nextPreset })
+      if (this.isSyncingFromStore) return;
+      const nextPreset = newVal === 'dusk' ? 'dusk' : 'night';
+      this.$store.commit('sceneView/updateAtmosphere', { preset: nextPreset });
     },
     fogEnabled(newVal) {
-      if (this.isSyncingFromStore) return
-      this.$store.commit('sceneView/updateAtmosphere', { fogEnabled: !!newVal })
+      if (this.isSyncingFromStore) return;
+      this.$store.commit('sceneView/updateAtmosphere', { fogEnabled: !!newVal });
     },
     fogDensity(newVal) {
-      if (this.isSyncingFromStore) return
-      const parsed = Number(newVal)
-      if (!Number.isFinite(parsed)) return
-      const clamped = Math.min(0.01, Math.max(0, parsed))
-      this.$store.commit('sceneView/updateAtmosphere', { fogDensity: clamped })
-    }
-  }
-}
+      if (this.isSyncingFromStore) return;
+      const parsed = Number(newVal);
+      if (!Number.isFinite(parsed)) return;
+      const clamped = Math.min(0.01, Math.max(0, parsed));
+      this.$store.commit('sceneView/updateAtmosphere', { fogDensity: clamped });
+    },
+  },
+};
 </script>
 
 <!-- reuse shared option-panel styles -->
