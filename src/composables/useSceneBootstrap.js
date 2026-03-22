@@ -7,8 +7,8 @@ export function setUpRenderer(vm) {
   vm.renderer = markRaw(new Three.WebGLRenderer({ antialias: true, alpha: true }));
   vm.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   vm.renderer.setSize(
-    Math.max(1, vm.container.clientWidth - 100),
-    Math.max(1, vm.container.clientHeight - 100),
+    Math.max(1, vm.container.clientWidth),
+    Math.max(1, vm.container.clientHeight),
   );
   vm.renderer.setClearColor(0x000000, 0);
   vm.container.appendChild(vm.renderer.domElement);

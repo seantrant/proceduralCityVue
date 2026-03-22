@@ -17,6 +17,7 @@ export interface DrawOnScene {
   floor: boolean
   roofLights: boolean
   traffic: boolean
+  airTraffic: boolean
 }
 
 export interface GridConfig {
@@ -48,6 +49,7 @@ export interface SceneViewState {
   atmosphere: AtmosphereConfig
   input: InputConfig
   trafficConfig: TrafficConfig
+  airTrafficConfig: AirTrafficConfig
   pointerLockRequestToken: number
 }
 
@@ -62,6 +64,7 @@ export const defaultDrawOnScene: DrawOnScene = {
   floor: true,
   roofLights: true,
   traffic: true,
+  airTraffic: true,
 }
 
 export const defaultGridConfig: GridConfig = {
@@ -90,10 +93,38 @@ export interface TrafficConfig {
   density: number
   minSpeed: number
   maxSpeed: number
+  showTrafficPaths: boolean
 }
 
 export const defaultTrafficConfig: TrafficConfig = {
   density: 100,
   minSpeed: 0.1,
   maxSpeed: 0.5,
+  showTrafficPaths: false,
+}
+
+export interface AirTrafficConfig {
+  planeCount: number
+  helicopterCount: number
+  planeMinSpeed: number
+  planeMaxSpeed: number
+  heliMinSpeed: number
+  heliMaxSpeed: number
+  planeAltitude: number
+  heliAltitude: number
+  respawnDelayMin: number
+  respawnDelayMax: number
+}
+
+export const defaultAirTrafficConfig: AirTrafficConfig = {
+  planeCount: 2,
+  helicopterCount: 1,
+  planeMinSpeed: 8,
+  planeMaxSpeed: 14,
+  heliMinSpeed: 2,
+  heliMaxSpeed: 4,
+  planeAltitude: 15,
+  heliAltitude: 8,
+  respawnDelayMin: 2,
+  respawnDelayMax: 8,
 }

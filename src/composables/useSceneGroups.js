@@ -61,6 +61,14 @@ export function setGroupVisibility(scene, drawOnScene) {
   if (trafficGroup) {
     trafficGroup.visible = !!(drawOnScene && drawOnScene.traffic !== false);
   }
+
+  const airTrafficGroup = scene.getObjectByName && scene.getObjectByName('airTrafficGroup');
+  if (airTrafficGroup) {
+    airTrafficGroup.visible = !!(drawOnScene && drawOnScene.airTraffic !== false);
+  }
+
+  // trafficPathsGroup visibility is controlled by trafficConfig.showTrafficPaths
+  // via a dedicated store watcher, so we leave it untouched here.
 }
 
 export function rebuildGridLayout({

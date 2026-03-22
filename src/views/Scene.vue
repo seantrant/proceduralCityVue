@@ -1,9 +1,9 @@
 <template>
   <div id="container">
-    <appNav />
     <appTodo />
     <appCamera />
     <appLayers />
+    <appTraffic />
     <appSettings />
     <appWeather />
     <mini-map
@@ -30,10 +30,11 @@
 <script>
 import * as Three from 'three';
 import { markRaw } from 'vue';
-import appNav from '@/components/nav';
+
 import appTodo from '@/components/todo/todo.vue';
 import appCamera from '@/components/camera';
 import appLayers from '@/components/layers';
+import appTraffic from '@/components/traffic/traffic.vue';
 import appSettings from '@/components/settings/settings.vue';
 import appWeather from '@/components/weather.vue';
 import miniMap from '@/components/miniMap.vue';
@@ -68,10 +69,10 @@ import { buildSceneStoreWatchers } from '@/composables/useSceneStoreWatchers';
 export default {
   name: 'Scene',
   components: {
-    appNav,
     appTodo,
     appCamera,
     appLayers,
+    appTraffic,
     appSettings,
     appWeather,
     miniMap,
@@ -156,8 +157,8 @@ export default {
 
     this._onResize = () => {
       if (!this.renderer || !this.camera || !this.container) return;
-      const width = Math.max(1, this.container.clientWidth - 100);
-      const height = Math.max(1, this.container.clientHeight - 100);
+      const width = Math.max(1, this.container.clientWidth);
+      const height = Math.max(1, this.container.clientHeight);
       this.renderer.setSize(width, height);
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
@@ -313,11 +314,12 @@ export default {
 
 <style scoped>
   #container{
-    position: absolute;
-    width:100vw;
-    height:100vh;
+    position: relative;
+    width:100%;
+    height:calc(100vh - 60px);
     margin:0px;
     padding:0px;
+    overflow:hidden;
   }
 
   .fps-hint{

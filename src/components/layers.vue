@@ -29,6 +29,13 @@
           >
         </li>
         <li class="panel-row">
+          <span class="panel-key">Air Traffic</span>
+          <input
+            v-model="showAirTraffic"
+            type="checkbox"
+          >
+        </li>
+        <li class="panel-row">
           <span class="panel-key">Grid layout</span>
           <input
             v-model="showGrid"
@@ -56,6 +63,7 @@ export default {
       showBuildings: !!(scene.drawOnScene && scene.drawOnScene.buildings),
       showRoofLights: !!(scene.drawOnScene && scene.drawOnScene.roofLights),
       showTraffic: !!(scene.drawOnScene && scene.drawOnScene.traffic),
+      showAirTraffic: !!(scene.drawOnScene && scene.drawOnScene.airTraffic),
       showGrid: !!(scene.drawOnScene && scene.drawOnScene.gridLayout),
       showFloor: !!(scene.drawOnScene && scene.drawOnScene.floor),
     };
@@ -79,6 +87,7 @@ export default {
     showBuildings(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { buildings: !!newVal }); },
     showRoofLights(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { roofLights: !!newVal }); },
     showTraffic(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { traffic: !!newVal }); },
+    showAirTraffic(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { airTraffic: !!newVal }); },
     showGrid(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { gridLayout: !!newVal }); },
     showFloor(newVal) { this.$store.commit('sceneView/updateDrawOnScene', { floor: !!newVal }); },
   },

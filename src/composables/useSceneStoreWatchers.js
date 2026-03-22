@@ -74,5 +74,14 @@ export function buildSceneStoreWatchers() {
         }
       },
     },
+    '$store.state.sceneView.trafficConfig.showTrafficPaths': {
+      handler(newVal) {
+        if (!this.scene) return;
+        const pathsGroup = this.scene.getObjectByName && this.scene.getObjectByName('trafficPathsGroup');
+        if (pathsGroup) {
+          pathsGroup.visible = !!newVal;
+        }
+      },
+    },
   };
 }

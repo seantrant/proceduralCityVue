@@ -7,6 +7,7 @@ import {
   setGroupVisibility,
 } from '@/composables/useSceneGroups';
 import { createTraffic } from '@/composables/useTraffic';
+import { createAirTraffic } from '@/composables/useAirTraffic';
 
 export function drawScene(vm, arrayOfGrids) {
   if (vm.drawOnScene.buildings) {
@@ -89,15 +90,27 @@ export function drawGridLayout(vm, arrayOfGrids) {
       halfExtent,
       disposeObject: vm.disposeObject,
     });
-    const roadGroup = vm.scene && vm.scene.getObjectByName && vm.scene.getObjectByName('roadGroup');
     try {
       const trafficConfig = (vm.$store && vm.$store.state && vm.$store.state.sceneView && vm.$store.state.sceneView.trafficConfig) || {};
       if (vm.drawOnScene && vm.drawOnScene.traffic) {
         createTraffic({
           scene: vm.scene,
-          roadGroup,
+          arrayOfGrids,
+          spacing,
+          halfExtent,
           disposeObject: vm.disposeObject,
           options: trafficConfig,
+        });
+      }
+    } catch (e) { void e; }
+    try {
+      const airTrafficConfig = (vm.$store && vm.$store.state && vm.$store.state.sceneView && vm.$store.state.sceneView.airTrafficConfig) || {};
+      if (vm.drawOnScene && vm.drawOnScene.airTraffic) {
+        createAirTraffic({
+          scene: vm.scene,
+          halfExtent,
+          disposeObject: vm.disposeObject,
+          options: airTrafficConfig,
         });
       }
     } catch (e) { void e; }

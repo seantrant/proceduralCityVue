@@ -1,4 +1,5 @@
 import { stepTrafficFrame } from '@/composables/useTraffic';
+import { stepAirTrafficFrame } from '@/composables/useAirTraffic';
 
 export function animateSceneFrame(vm, now, options = {}) {
   const { stepCameraAnimation } = options;
@@ -127,6 +128,11 @@ export function animateSceneFrame(vm, now, options = {}) {
   const trafficGroup = getCachedSceneObject('trafficGroup', 'trafficGroup');
   try {
     stepTrafficFrame(vm, now, trafficGroup);
+  } catch (e) { void e; }
+
+  const airTrafficGroup = getCachedSceneObject('airTrafficGroup', 'airTrafficGroup');
+  try {
+    stepAirTrafficFrame(vm, now, airTrafficGroup);
   } catch (e) { void e; }
 
   vm.renderer.render(vm.scene, vm.camera);

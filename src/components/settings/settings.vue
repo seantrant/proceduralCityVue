@@ -16,25 +16,6 @@
         </li>
 
 
-        <li class="panel-row panel-section">
-          Traffic Settings
-        </li>
-        <li class="panel-row">
-          <span class="panel-key">Density</span>
-          <input v-model.number="traffic.density" step="0.1" min="0.1">
-        </li>
-        <li class="panel-row">
-          <span class="panel-key">Min speed</span>
-          <input v-model.number="traffic.minSpeed" step="0.1" min="0">
-        </li>
-        <li class="panel-row">
-          <span class="panel-key">Max speed</span>
-          <input v-model.number="traffic.maxSpeed" step="0.1" min="0">
-        </li>
-        <li class="panel-row panel-row-action">
-          <span class="panel-key">Traffic</span>
-          <button class="generateButton" @click="applyTrafficSettings()">Apply</button>
-        </li>
         <hr>
         <li class="panel-section">
           FPS Controls
@@ -81,6 +62,93 @@
           </button>
         </li>
 
+        <hr>
+        <li class="panel-section">
+          Air Traffic
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Planes</span>
+          <input
+            v-model.number="airTraffic.planeCount"
+            type="number"
+            step="1"
+            min="0"
+            max="10"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Helicopters</span>
+          <input
+            v-model.number="airTraffic.helicopterCount"
+            type="number"
+            step="1"
+            min="0"
+            max="5"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Plane min speed</span>
+          <input
+            v-model.number="airTraffic.planeMinSpeed"
+            type="number"
+            step="1"
+            min="1"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Plane max speed</span>
+          <input
+            v-model.number="airTraffic.planeMaxSpeed"
+            type="number"
+            step="1"
+            min="1"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Heli min speed</span>
+          <input
+            v-model.number="airTraffic.heliMinSpeed"
+            type="number"
+            step="0.5"
+            min="0.5"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Heli max speed</span>
+          <input
+            v-model.number="airTraffic.heliMaxSpeed"
+            type="number"
+            step="0.5"
+            min="0.5"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Plane altitude</span>
+          <input
+            v-model.number="airTraffic.planeAltitude"
+            type="number"
+            step="1"
+            min="5"
+          >
+        </li>
+        <li class="panel-row">
+          <span class="panel-key">Heli altitude</span>
+          <input
+            v-model.number="airTraffic.heliAltitude"
+            type="number"
+            step="1"
+            min="3"
+          >
+        </li>
+        <li class="panel-row panel-row-action">
+          <span class="panel-key">Air Traffic</span>
+          <button
+            class="generateButton"
+            @click="applyAirTrafficSettings()"
+          >
+            Apply
+          </button>
+        </li>
       </ul>
     </aside>
   </transition>

@@ -1,8 +1,20 @@
 <template>
   <div id="app">
+    <app-nav />
     <router-view />
   </div>
 </template>
+
+<script>
+import appNav from '@/components/nav';
+
+export default {
+  name: 'App',
+  components: {
+    appNav,
+  },
+};
+</script>
 
 <style lang="scss">
 body{
@@ -15,7 +27,8 @@ body{
   margin:0px;
   padding:0px;
   height:100vh;
-  width:100vw;
+  width:100%;
+  overflow:hidden;
   font-family: 'Avenir', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

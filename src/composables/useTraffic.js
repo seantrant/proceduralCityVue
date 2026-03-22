@@ -1,5 +1,6 @@
 import * as Three from 'three';
 import { ensureNamedGroup } from '@/composables/useSceneGroups';
+import { buildRoadGraph, generateVehiclePath } from '@/utils/roadGraph';
 
 function createVehicleTexture() {
   const size = 32;
@@ -21,8 +22,13 @@ function createVehicleTexture() {
   return tex;
 }
 
+const PATH_COLORS = [
+  0x00ffff, 0xff00ff, 0x00ff88, 0xffaa00,
+  0x44aaff, 0xff4488, 0x88ff44, 0xffff00,
+];
+
 export function createTraffic({
-  scene, roadGroup, disposeObject, options = {},
+  scene, arrayOfGrids, spacing, halfExtent, disposeObject, options = {},
 }) {
   const trafficGroup = ensureNamedGroup(scene, 'trafficGroup', disposeObject);
   if (trafficGroup.userData && trafficGroup.userData.vehicleTexture && typeof trafficGroup.userData.vehicleTexture.dispose === 'function') {
@@ -32,27 +38,28 @@ export function createTraffic({
     vehicleSprites: [],
     vehicleMeta: [],
     vehicleTexture: null,
+    roadGraph: null,
   };
 
-  const segments = (roadGroup && roadGroup.userData && roadGroup.userData.centerSegments) || [];
-  if (!segments.length) return trafficGroup;
+  const roadGraph = buildRoadGraph(arrayOfGrids || [], spacing, halfExtent);
+  if (!roadGraph || roadGraph.size === 0) return trafficGroup;
 
   const density = Number(options.density) || 100;
   const minSpeed = Number(options.minSpeed) || 0.1;
   const maxSpeed = Number(options.maxSpeed) || 0.5;
 
-  const totalLength = segments.reduce((s, seg) => s + (seg.length || 0), 0);
-  const numVehicles = Math.max(1, Math.round((totalLength / 100) * density));
+  const numVehicles = Math.max(1, Math.round((roadGraph.size / 100) * density));
 
   const vehicleTexture = createVehicleTexture();
   const sprites = [];
   const metas = [];
 
   for (let i = 0; i < numVehicles; i++) {
-    const segIdx = Math.floor(Math.random() * segments.length);
-    const seg = segments[segIdx];
+    const path = generateVehiclePath(roadGraph, 40, 80);
+    if (path.length < 2) continue;
+
+    const waypointIndex = Math.floor(Math.random() * (path.length - 1));
     const t = Math.random();
-    const dir = Math.random() < 0.5 ? 1 : -1;
     const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
 
     const mat = new Three.SpriteMaterial({
@@ -63,19 +70,17 @@ export function createTraffic({
       opacity: 0.95,
     });
     const sprite = new Three.Sprite(mat);
-    const pos = new Three.Vector3().lerpVectors(seg.a, seg.b, t);
+    const pos = new Three.Vector3().lerpVectors(path[waypointIndex], path[waypointIndex + 1], t);
     sprite.position.copy(pos);
-    // larger default scale to ensure visibility
     sprite.scale.set(0.34, 0.34, 1);
-    // render on top to be visible against scene geometry
     sprite.renderOrder = 999;
     trafficGroup.add(sprite);
 
     sprites.push(sprite);
     metas.push({
-      segmentIndex: segIdx,
+      path,
+      waypointIndex,
       t,
-      dir,
       speed,
     });
   }
@@ -84,18 +89,46 @@ export function createTraffic({
     vehicleSprites: sprites,
     vehicleMeta: metas,
     vehicleTexture,
-    segments,
+    roadGraph,
   };
 
+  // build path visualisation (hidden by default)
+  buildTrafficPathLines(trafficGroup, scene, disposeObject, options.showTrafficPaths);
+
   return trafficGroup;
+}
+
+/**
+ * Create a Three.js group that renders each vehicle's path as a coloured line.
+ */
+export function buildTrafficPathLines(trafficGroup, scene, disposeObject, visible) {
+  const pathsGroup = ensureNamedGroup(scene, 'trafficPathsGroup', disposeObject);
+  pathsGroup.visible = !!visible;
+  const metas = (trafficGroup && trafficGroup.userData && trafficGroup.userData.vehicleMeta) || [];
+
+  metas.forEach((meta, idx) => {
+    if (!meta.path || meta.path.length < 2) return;
+    const color = PATH_COLORS[idx % PATH_COLORS.length];
+    const points = meta.path.map((p) => new Three.Vector3(p.x, p.y + 0.015, p.z));
+    const geometry = new Three.BufferGeometry().setFromPoints(points);
+    const material = new Three.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+    });
+    const line = new Three.Line(geometry, material);
+    line.renderOrder = 998;
+    pathsGroup.add(line);
+  });
 }
 
 export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
   if (!vm || !vm.scene || !vm.camera) return;
   const trafficGroup = cachedTrafficGroup || (vm.scene.getObjectByName && vm.scene.getObjectByName('trafficGroup'));
   if (!trafficGroup || !trafficGroup.visible || !trafficGroup.userData) return;
-  const { vehicleSprites = [], vehicleMeta = [], segments = [] } = trafficGroup.userData;
-  if (!segments.length) return;
+  const { vehicleSprites = [], vehicleMeta = [] } = trafficGroup.userData;
+  if (!vehicleMeta.length) return;
 
   const deltaMs = now - (vm._trafficLastTime || now);
   const delta = Math.min(0.05, Math.max(0, deltaMs / 1000));
@@ -104,9 +137,7 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
   const scratch = trafficGroup.userData.__scratch || {
     camDir: new Three.Vector3(),
     pos: new Three.Vector3(),
-    nextPos: new Three.Vector3(),
     heading: new Three.Vector3(),
-    fallbackHeading: new Three.Vector3(),
     fallbackPerp: new Three.Vector3(),
     offsetVec: new Three.Vector3(),
   };
@@ -117,52 +148,55 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
 
   for (let i = 0; i < vehicleMeta.length; i++) {
     const meta = vehicleMeta[i];
-    const seg = segments[meta.segmentIndex];
-    if (!seg || !seg.length) continue;
-    const segLen = seg.length || 1;
-    const dt = (meta.speed * delta) / segLen;
-    meta.t += dt * meta.dir;
+    const { path } = meta;
+    if (!path || path.length < 2) continue;
 
-    if (meta.t > 1) {
+    // advance along waypoints
+    const wpA = path[meta.waypointIndex];
+    const wpB = path[(meta.waypointIndex + 1) % path.length];
+    const wpDist = wpA.distanceTo(wpB) || 1;
+    const dt = (meta.speed * delta) / wpDist;
+    meta.t += dt;
+
+    // move to next waypoint(s) if needed
+    while (meta.t >= 1 && path.length >= 2) {
       meta.t -= 1;
-      meta.segmentIndex = (meta.segmentIndex + 1) % segments.length;
-    } else if (meta.t < 0) {
-      meta.t += 1;
-      meta.segmentIndex = (meta.segmentIndex - 1 + segments.length) % segments.length;
+      meta.waypointIndex = (meta.waypointIndex + 1) % path.length;
+      const aIdx = meta.waypointIndex;
+      const bIdx = (aIdx + 1) % path.length;
+      const newDist = path[aIdx].distanceTo(path[bIdx]) || 1;
+      meta.t *= wpDist / newDist;
+      break;
     }
 
-    const curSeg = segments[meta.segmentIndex];
-    const pos = scratch.pos.lerpVectors(curSeg.a, curSeg.b, meta.t);
+    const aIdx = meta.waypointIndex;
+    const bIdx = (aIdx + 1) % path.length;
+    const segA = path[aIdx];
+    const segB = path[bIdx];
+
+    const pos = scratch.pos.lerpVectors(segA, segB, Math.min(meta.t, 1));
     const sprite = vehicleSprites[i];
-    if (sprite) {
-      // determine perpendicular for lateral offset (center-left / center-right)
-      let perp = curSeg.perpLeft;
-      if (!perp) {
-        const fallbackHeading = scratch.fallbackHeading.subVectors(curSeg.b, curSeg.a);
-        fallbackHeading.y = 0;
-        if (fallbackHeading.lengthSq() > 1e-6) fallbackHeading.normalize();
-        else fallbackHeading.set(1, 0, 0);
-        perp = scratch.fallbackPerp.set(-fallbackHeading.z, 0, fallbackHeading.x);
-        perp.normalize();
-      }
+    if (!sprite) continue;
 
-      const lookT = Math.max(0, Math.min(1, meta.t + 0.05 * meta.dir));
-      const nextPos = scratch.nextPos.lerpVectors(curSeg.a, curSeg.b, lookT);
-      const heading = scratch.heading.subVectors(nextPos, pos);
-      if (heading.lengthSq() > 1e-6) heading.normalize();
-      else heading.set(meta.dir, 0, 0);
+    // heading for lane offset & headlight colour
+    const heading = scratch.heading.subVectors(segB, segA);
+    heading.y = 0;
+    if (heading.lengthSq() > 1e-6) heading.normalize();
+    else heading.set(1, 0, 0);
 
-      const dot = heading.dot(scratch.camDir);
-      const towards = dot < 0;
-      const color = towards ? 0xffffff : 0xff2222;
-      if (sprite.material && sprite.material.color) sprite.material.color.setHex(color);
+    // perpendicular (left)
+    const perp = scratch.fallbackPerp.set(-heading.z, 0, heading.x).normalize();
 
-      // lane offset: away-from-camera -> center-left; toward-camera -> center-right
-      const laneOffset = 0.14;
-      // perp is a left-pointing perpendicular; use negation for right lane
-      const offsetVec = scratch.offsetVec.copy(perp).multiplyScalar(towards ? -laneOffset : laneOffset);
+    // approaching or receding relative to camera
+    const dot = heading.dot(scratch.camDir);
+    const towards = dot < 0;
+    const color = towards ? 0xffffff : 0xff2222;
+    if (sprite.material && sprite.material.color) sprite.material.color.setHex(color);
 
-      sprite.position.copy(pos).add(offsetVec);
-    }
+    // lane offset
+    const laneOffset = 0.14;
+    const offsetVec = scratch.offsetVec.copy(perp).multiplyScalar(towards ? -laneOffset : laneOffset);
+
+    sprite.position.copy(pos).add(offsetVec);
   }
 }

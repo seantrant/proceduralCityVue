@@ -5,14 +5,25 @@ export default {
     return {
       isSyncingGrid: 0,
       isSyncingInput: 0,
-      isSyncingTraffic: 0,
       grid: Object.assign({}, scene.grid || {}),
-      traffic: Object.assign({}, scene.trafficConfig || {}),
       fps: Object.assign({}, scene.input || {
         mouseSensitivity: 0.0025,
         moveSpeed: 5.0,
         acceleration: 30.0,
         friction: 10.0,
+      }),
+      isSyncingAirTraffic: 0,
+      airTraffic: Object.assign({}, scene.airTrafficConfig || {
+        planeCount: 2,
+        helicopterCount: 1,
+        planeMinSpeed: 8,
+        planeMaxSpeed: 14,
+        heliMinSpeed: 2,
+        heliMaxSpeed: 4,
+        planeAltitude: 15,
+        heliAltitude: 8,
+        respawnDelayMin: 2,
+        respawnDelayMax: 8,
       }),
     };
   },
@@ -52,11 +63,13 @@ export default {
       },
       deep: true,
     },
-    '$store.state.sceneView.trafficConfig': {
+    '$store.state.sceneView.airTrafficConfig': {
       handler(newVal) {
-        this.isSyncingTraffic++;
-        this.traffic = Object.assign({}, newVal || {});
-        this.$nextTick(() => { this.isSyncingTraffic--; });
+        this.isSyncingAirTraffic++;
+        this.airTraffic = Object.assign({}, newVal || {});
+        this.$nextTick(() => {
+          this.isSyncingAirTraffic--;
+        });
       },
       deep: true,
     },
@@ -109,13 +122,6 @@ export default {
       },
       deep: true,
     },
-    traffic: {
-      handler(newVal) {
-        if (this.isSyncingTraffic) return;
-        // do not auto-commit; user clicks Apply
-      },
-      deep: true,
-    },
   },
   methods: {
     reGenerate() {
@@ -129,14 +135,8 @@ export default {
     applyFpsSettings() {
       this.$store.commit('sceneView/updateInput', this.fps);
     },
-    applyTrafficSettings() {
-      const payload = {
-        density: Number(this.traffic.density) || 0,
-        minSpeed: Number(this.traffic.minSpeed) || 0,
-        maxSpeed: Number(this.traffic.maxSpeed) || 0,
-      };
-      this.$store.commit('sceneView/updateScene', { trafficConfig: payload });
-      // bump scene version so drawing will recreate traffic
+    applyAirTrafficSettings() {
+      this.$store.commit('sceneView/updateScene', { airTrafficConfig: Object.assign({}, this.airTraffic) });
       this.$store.commit('incrementSceneVersion');
     },
   },

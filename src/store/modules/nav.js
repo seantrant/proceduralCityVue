@@ -3,6 +3,7 @@ const defaultNavItems = () => ([
   { name: 'camera', open: true },
   { name: 'layers', open: true },
   { name: 'weather', open: true },
+  { name: 'traffic', open: false },
   { name: 'settings', open: true },
 ]);
 
