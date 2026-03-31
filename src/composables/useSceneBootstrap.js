@@ -18,12 +18,12 @@ export function setUpCamera(vm) {
   const fov = 70;
   const aspect = vm.container.clientWidth / vm.container.clientHeight;
   const near = 0.1;
-  const far = 500000;
-  vm.camera = markRaw(new Three.PerspectiveCamera(fov, aspect, near, far));
-
   const gridSize = (vm.grid && vm.grid.gridSize)
     || (vm.gridSetup && vm.gridSetup.grid && vm.gridSetup.grid.gridSize)
     || 8;
+  const far = Math.max(2000, gridSize * 10);
+  vm.camera = markRaw(new Three.PerspectiveCamera(fov, aspect, near, far));
+
   const spacing = (vm.grid && vm.grid.spacing) || 1;
   const halfExtent = ((gridSize - 1) / 2) * spacing;
   vm.camera.position.set(0, 4.5, halfExtent + 2);
@@ -44,8 +44,8 @@ export function disposeRendererAndScene(vm, options = {}) {
 
   if (vm.renderer && typeof vm.renderer.dispose === 'function') {
     try {
-      vm.renderer.dispose();
       if (vm.renderer.forceContextLoss) vm.renderer.forceContextLoss();
+      vm.renderer.dispose();
     } catch (e) {
       void e;
     }

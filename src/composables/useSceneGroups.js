@@ -1,11 +1,8 @@
 import * as Three from 'three';
 import { markRaw } from 'vue';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-
-export const MINI_MAP_BUILDING_FILL = '#6a0dad';
-export const MINI_MAP_BUILDING_STROKE = '#ffffff';
-export const MINI_MAP_ROAD_FILL = '#121212';
-export const MINI_MAP_JUNCTION_FILL = '#6a0000';
+import { createBillboardInstancedMesh } from '@/utils/billboardShader';
+import { generateRandomBuilding, disposeBuildingGroup } from '@/utils/buildingShapes';
 
 const ROAD_BASE_Y = 0.106;
 const ROAD_LINE_Y = 0.112;
@@ -16,7 +13,6 @@ const ROAD_CENTER_GAP_RATIO = 0.18;
 const STREET_LIGHT_SIDE_OFFSET_RATIO = 0.28;
 const STREET_LIGHT_CORE_SCALE = 0.12;
 const STREET_LIGHT_HALO_SCALE = 0.32;
-const STREET_LIGHT_PERIOD_SEC = 4.0;
 const STREET_LIGHT_SPACING_CELLS = 3;
 
 export function ensureNamedGroup(scene, groupName, disposeObject) {
@@ -24,7 +20,8 @@ export function ensureNamedGroup(scene, groupName, disposeObject) {
   if (group) {
     while (group.children.length) {
       const child = group.children[0];
-      if (disposeObject) disposeObject(child);
+      if (typeof child.userData?.dispose === 'function') child.userData.dispose(child);
+      else if (disposeObject) disposeObject(child);
       group.remove(child);
     }
   } else {
@@ -77,8 +74,8 @@ export function rebuildGridLayout({
   const gridGroup = ensureNamedGroup(scene, 'gridGroup', disposeObject);
   const height = 0.01;
   const tileGeometry = new Three.BoxGeometry(spacing, height, spacing);
-  const buildingMaterial = new Three.MeshBasicMaterial({ color: 0x6a0dad, wireframe: false });
-  const junctionMaterial = new Three.MeshBasicMaterial({ color: 0x6a0000, wireframe: false });
+  const buildingMaterial = new Three.MeshBasicMaterial({ color: 0x121212, wireframe: false });
+  const junctionMaterial = new Three.MeshBasicMaterial({ color: 0x121212, wireframe: false });
   const dummy = new Three.Object3D();
   const buildings = [];
   const junctions = [];
@@ -262,16 +259,9 @@ export function rebuildRoads({
   }
 }
 
-const WINDOW_HEIGHT_THRESHOLD = 2;
-const WINDOW_PANE_W = 0.14;
-const WINDOW_PANE_H = 0.22;
-const WINDOW_LIT_CHANCE = 0.45;
-const WINDOW_COL_OFFSETS = [-0.25, 0.25];
 const ROOF_LIGHT_TOP_PERCENT = 0.1;
-const ROOF_LIGHT_CORNER_INSET = 0.09;
 const ROOF_LIGHT_CORE_SCALE = 0.11;
 const ROOF_LIGHT_HALO_SCALE = 0.28;
-const ROOF_LIGHT_VERTICAL_OFFSET = 0.03;
 const ROOF_LIGHT_MIN_PERIOD_SEC = 3.2;
 const ROOF_LIGHT_MAX_PERIOD_SEC = 6.2;
 const ROOF_LIGHT_MIN_BURST_GAP = 0.14;
@@ -339,6 +329,20 @@ function createStreetLightTexture() {
   return texture;
 }
 
+function hashBuildingSeed(grid) {
+  return `${grid.id}:${grid.coords.x}:${grid.coords.y}`;
+}
+
+function getWorldRoofAnchors(buildingGroup) {
+  const anchors = (((buildingGroup || {}).userData || {}).metadata || {}).roofLightAnchors || [];
+  if (!anchors.length) return [];
+  buildingGroup.updateMatrixWorld(true);
+  return anchors.map((anchor) => {
+    const local = new Three.Vector3(anchor.x, anchor.y, anchor.z);
+    return buildingGroup.localToWorld(local);
+  });
+}
+
 export function rebuildBuildings({
   scene, arrayOfGrids, spacing, halfExtent, drawOnScene, disposeObject,
 }) {
@@ -360,57 +364,36 @@ export function rebuildBuildings({
     && drawOnScene.buildings
     && drawOnScene.roofLights
   );
-  const buildingMaterial = new Three.MeshBasicMaterial({ color: 0x000000, wireframe: false });
-  const edgeMaterial = new Three.LineBasicMaterial({ color: 0xffffff });
-  const paneGeometry = new Three.PlaneGeometry(WINDOW_PANE_W, WINDOW_PANE_H);
-  const warmWindowMaterial = new Three.MeshBasicMaterial({ color: 0x886622, side: Three.DoubleSide });
-  const coolWindowMaterial = new Three.MeshBasicMaterial({ color: 0x334455, side: Three.DoubleSide });
-  const darkWindowMaterial = new Three.MeshBasicMaterial({ color: 0x222222, side: Three.DoubleSide });
-  const buildingGeometryCache = new Map();
-  const buildingEdgeCache = new Map();
-  const buildingHeightBuckets = new Map();
-  const warmWindowInstances = [];
-  const coolWindowInstances = [];
-  const darkWindowInstances = [];
   const buildingRecords = [];
   const dummy = new Three.Object3D();
 
-  const getQuantizedHeight = heightValue => Math.max(0.25, Math.round(heightValue * 4) / 4);
-
-  const getBuildingGeometry = (quantizedHeight) => {
-    const key = quantizedHeight.toFixed(2);
-    if (!buildingGeometryCache.has(key)) {
-      buildingGeometryCache.set(key, new Three.BoxGeometry(spacing, quantizedHeight, spacing));
-    }
-    return {
-      geometry: buildingGeometryCache.get(key),
-      key,
-    };
-  };
-
-  const getBuildingEdges = (quantizedHeight) => {
-    const { geometry, key } = getBuildingGeometry(quantizedHeight);
-    if (!buildingEdgeCache.has(key)) {
-      buildingEdgeCache.set(key, new Three.EdgesGeometry(geometry));
-    }
-    return buildingEdgeCache.get(key);
-  };
-
-  const pushWindow = (target, x, y, z, rotY) => {
-    target.push({
-      x, y, z, rotY,
-    });
-  };
-
   arrayOfGrids.forEach((grid) => {
     if (grid.contents !== 'building') return;
-
-    const randomHeight = Math.random() * 5;
-    const height = getQuantizedHeight(randomHeight);
     const x = grid.coords.x * spacing - halfExtent;
     const z = grid.coords.y * spacing - halfExtent;
 
-    buildingRecords.push({ height, x, z });
+    const seed = hashBuildingSeed(grid);
+    const { group, height, shapeType, metadata } = generateRandomBuilding(spacing, { seed });
+    group.position.set(x, 0.1, z);
+    group.updateMatrix();
+    group.matrixAutoUpdate = false;
+    group.userData = group.userData || {};
+    group.userData.dispose = disposeBuildingGroup;
+    buildingGroup.add(group);
+
+    const anchors = getWorldRoofAnchors(group);
+    const roofAnchors = anchors.length
+      ? anchors
+      : [new Three.Vector3(x, 0.1 + height + 0.03, z)];
+
+    buildingRecords.push({
+      x,
+      z,
+      height,
+      shapeType,
+      roofAnchors,
+      metadata,
+    });
   });
 
   const heightsDesc = buildingRecords
@@ -422,21 +405,8 @@ export function rebuildBuildings({
   const beaconBuildings = [];
 
   buildingRecords.forEach((record) => {
-    const { height, x, z } = record;
-    const bucketKey = height.toFixed(2);
-
-    if (!buildingHeightBuckets.has(bucketKey)) {
-      buildingHeightBuckets.set(bucketKey, {
-        height,
-        transforms: [],
-      });
-    }
-
-    buildingHeightBuckets.get(bucketKey).transforms.push({ x, y: 0.1 + height / 2, z });
-
+    const { height, roofAnchors } = record;
     if (height >= minBeaconHeight) {
-      const inset = spacing * (0.5 - ROOF_LIGHT_CORNER_INSET);
-      const roofY = 0.1 + height + ROOF_LIGHT_VERTICAL_OFFSET;
       const pulsePeriod = ROOF_LIGHT_MIN_PERIOD_SEC
         + Math.random() * (ROOF_LIGHT_MAX_PERIOD_SEC - ROOF_LIGHT_MIN_PERIOD_SEC);
       const pulsePhaseNorm = Math.random();
@@ -452,166 +422,103 @@ export function rebuildBuildings({
         pulseSharpness,
         burstGap,
         pulseWidth,
-        corners: [
-          { x: x + inset, y: roofY, z: z + inset },
-          { x: x + inset, y: roofY, z: z - inset },
-          { x: x - inset, y: roofY, z: z + inset },
-          { x: x - inset, y: roofY, z: z - inset },
-        ],
-      });
-    }
-
-    if (height <= WINDOW_HEIGHT_THRESHOLD) return;
-
-    const litBucket = Math.random() < 0.5 ? warmWindowInstances : coolWindowInstances;
-    const faceOffset = spacing * 0.5 + 0.001;
-    const faceConfigs = [
-      { rotY: 0, getPos: (bx, bz, co) => [bx + co * spacing, bz + faceOffset] },
-      { rotY: Math.PI, getPos: (bx, bz, co) => [bx + co * spacing, bz - faceOffset] },
-      { rotY: Math.PI / 2, getPos: (bx, bz, co) => [bx + faceOffset, bz + co * spacing] },
-      { rotY: -Math.PI / 2, getPos: (bx, bz, co) => [bx - faceOffset, bz + co * spacing] },
-    ];
-    const floors = Math.floor(height);
-
-    faceConfigs.forEach(({ rotY, getPos }) => {
-      WINDOW_COL_OFFSETS.forEach((co) => {
-        for (let row = 0; row < floors; row++) {
-          const wy = 0.1 + 0.5 + row;
-          const [wx, wz] = getPos(x, z, co);
-          if (Math.random() < WINDOW_LIT_CHANCE) {
-            pushWindow(litBucket, wx, wy, wz, rotY);
-          } else {
-            pushWindow(darkWindowInstances, wx, wy, wz, rotY);
-          }
-        }
-      });
-    });
-  });
-
-  buildingHeightBuckets.forEach(({ height, transforms }) => {
-    if (!transforms.length) return;
-    const { geometry } = getBuildingGeometry(height);
-    const instances = new Three.InstancedMesh(geometry, buildingMaterial, transforms.length);
-    transforms.forEach((transform, idx) => {
-      dummy.position.set(transform.x, transform.y, transform.z);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
-      dummy.updateMatrix();
-      instances.setMatrixAt(idx, dummy.matrix);
-    });
-    instances.instanceMatrix.needsUpdate = true;
-    buildingGroup.add(instances);
-
-    const baseEdges = getBuildingEdges(height);
-    const mergedEdgeParts = [];
-    transforms.forEach((transform) => {
-      dummy.position.set(transform.x, transform.y, transform.z);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, 1, 1);
-      dummy.updateMatrix();
-      const transformedEdges = baseEdges.clone();
-      transformedEdges.applyMatrix4(dummy.matrix);
-      mergedEdgeParts.push(transformedEdges);
-    });
-
-    if (mergedEdgeParts.length) {
-      const mergedEdges = mergeGeometries(mergedEdgeParts, false);
-      if (mergedEdges) {
-        const outlineSegments = new Three.LineSegments(mergedEdges, edgeMaterial);
-        buildingGroup.add(outlineSegments);
-      }
-      mergedEdgeParts.forEach((part) => {
-        if (part && part.dispose) part.dispose();
+        corners: roofAnchors,
       });
     }
   });
-
-  const addWindowInstances = (transforms, material) => {
-    if (!transforms.length) return;
-    const instances = new Three.InstancedMesh(paneGeometry, material, transforms.length);
-    transforms.forEach((transform, idx) => {
-      dummy.position.set(transform.x, transform.y, transform.z);
-      dummy.rotation.set(0, transform.rotY, 0);
-      dummy.scale.set(1, 1, 1);
-      dummy.updateMatrix();
-      instances.setMatrixAt(idx, dummy.matrix);
-    });
-    instances.instanceMatrix.needsUpdate = true;
-    buildingGroup.add(instances);
-  };
-
-  addWindowInstances(warmWindowInstances, warmWindowMaterial);
-  addWindowInstances(coolWindowInstances, coolWindowMaterial);
-  addWindowInstances(darkWindowInstances, darkWindowMaterial);
 
   roofLightGroup.userData = {
-    beaconSprites: [],
     beaconTexture: null,
+    coreInstancedMesh: null,
+    haloInstancedMesh: null,
+    beaconCount: 0,
+    // per-beacon pulse parameters (flat typed arrays)
+    pulsePeriods: null,
+    pulsePhaseNorms: null,
+    pulseSharpnesses: null,
+    burstGaps: null,
+    pulseWidths: null,
+    pulseMins: null,
   };
 
   if (!drawOnScene || !drawOnScene.roofLights || !beaconBuildings.length) return;
 
   const beaconTexture = createBeaconTexture();
-  const beaconSprites = [];
 
+  // Flatten all beacon corner positions and per-beacon pulse data
+  // Each beacon building has 4 corners
+  const totalBeacons = beaconBuildings.reduce((sum, b) => sum + b.corners.length, 0);
+
+  const pulsePeriods = new Float32Array(totalBeacons);
+  const pulsePhaseNorms = new Float32Array(totalBeacons);
+  const pulseSharpnesses = new Float32Array(totalBeacons);
+  const burstGaps = new Float32Array(totalBeacons);
+  const pulseWidths = new Float32Array(totalBeacons);
+  const pulseMins = new Float32Array(totalBeacons);
+
+  // Core InstancedMesh
+  const coreMesh = createBillboardInstancedMesh({
+    count: totalBeacons,
+    map: beaconTexture,
+    color: 0xff3333,
+    blending: Three.AdditiveBlending,
+    depthWrite: false,
+    defaultOpacity: 0.98,
+    defaultScale: ROOF_LIGHT_CORE_SCALE,
+  });
+  coreMesh.name = 'beaconCoreMesh';
+  coreMesh.renderOrder = 910;
+
+  // Halo InstancedMesh
+  const haloMesh = createBillboardInstancedMesh({
+    count: totalBeacons,
+    map: beaconTexture,
+    color: 0xff0000,
+    blending: Three.AdditiveBlending,
+    depthWrite: false,
+    defaultOpacity: 0.55,
+    defaultScale: ROOF_LIGHT_HALO_SCALE,
+  });
+  haloMesh.name = 'beaconHaloMesh';
+  haloMesh.renderOrder = 909;
+
+  // Reuse the existing dummy Object3D from rebuildBuildings scope
+  let idx = 0;
   beaconBuildings.forEach((beaconBuilding) => {
-    const coreMaterial = new Three.SpriteMaterial({
-      map: beaconTexture,
-      color: 0xff3333,
-      transparent: true,
-      opacity: 0.98,
-      depthWrite: false,
-      blending: Three.AdditiveBlending,
-    });
-    const haloMaterial = new Three.SpriteMaterial({
-      map: beaconTexture,
-      color: 0xff0000,
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-      blending: Three.AdditiveBlending,
-    });
-
     beaconBuilding.corners.forEach((point) => {
-      const coreSprite = new Three.Sprite(coreMaterial);
-      coreSprite.position.set(point.x, point.y, point.z);
-      coreSprite.scale.set(ROOF_LIGHT_CORE_SCALE, ROOF_LIGHT_CORE_SCALE, 1);
-      coreSprite.userData = {
-        baseScale: ROOF_LIGHT_CORE_SCALE,
-        pulseScale: 0.14,
-        baseOpacity: 0.98,
-        pulseMin: 0.08,
-        pulsePeriod: beaconBuilding.pulsePeriod,
-        pulsePhaseNorm: beaconBuilding.pulsePhaseNorm,
-        pulseSharpness: beaconBuilding.pulseSharpness,
-        burstGap: beaconBuilding.burstGap,
-        pulseWidth: beaconBuilding.pulseWidth,
-      };
-      roofLightGroup.add(coreSprite);
-      beaconSprites.push(coreSprite);
+      dummy.position.set(point.x, point.y, point.z);
+      dummy.updateMatrix();
+      coreMesh.setMatrixAt(idx, dummy.matrix);
+      haloMesh.setMatrixAt(idx, dummy.matrix);
 
-      const haloSprite = new Three.Sprite(haloMaterial);
-      haloSprite.position.set(point.x, point.y, point.z);
-      haloSprite.scale.set(ROOF_LIGHT_HALO_SCALE, ROOF_LIGHT_HALO_SCALE, 1);
-      haloSprite.userData = {
-        baseScale: ROOF_LIGHT_HALO_SCALE,
-        pulseScale: 0.24,
-        baseOpacity: 0.55,
-        pulseMin: 0.04,
-        pulsePeriod: beaconBuilding.pulsePeriod,
-        pulsePhaseNorm: beaconBuilding.pulsePhaseNorm,
-        pulseSharpness: beaconBuilding.pulseSharpness,
-        burstGap: beaconBuilding.burstGap,
-        pulseWidth: beaconBuilding.pulseWidth,
-      };
-      roofLightGroup.add(haloSprite);
-      beaconSprites.push(haloSprite);
+      pulsePeriods[idx] = beaconBuilding.pulsePeriod;
+      pulsePhaseNorms[idx] = beaconBuilding.pulsePhaseNorm;
+      pulseSharpnesses[idx] = beaconBuilding.pulseSharpness;
+      burstGaps[idx] = beaconBuilding.burstGap;
+      pulseWidths[idx] = beaconBuilding.pulseWidth;
+      pulseMins[idx] = 0; // pulseMin default
+
+      idx += 1;
     });
   });
 
+  coreMesh.instanceMatrix.needsUpdate = true;
+  haloMesh.instanceMatrix.needsUpdate = true;
+
+  roofLightGroup.add(coreMesh);
+  roofLightGroup.add(haloMesh);
+
   roofLightGroup.userData = {
-    beaconSprites,
     beaconTexture,
+    coreInstancedMesh: coreMesh,
+    haloInstancedMesh: haloMesh,
+    beaconCount: totalBeacons,
+    pulsePeriods,
+    pulsePhaseNorms,
+    pulseSharpnesses,
+    burstGaps,
+    pulseWidths,
+    pulseMins,
   };
 }
 
@@ -636,28 +543,12 @@ export function rebuildStreetLights({
 
   const lightTexture = createStreetLightTexture();
   if (!lightTexture) {
-    streetLightGroup.userData = { streetSprites: [], lightTexture: null };
+    streetLightGroup.userData = { lightTexture: null };
     return;
   }
 
-  const coreMaterial = new Three.SpriteMaterial({
-    map: lightTexture,
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.95,
-    depthWrite: false,
-    blending: Three.AdditiveBlending,
-  });
-  const haloMaterial = new Three.SpriteMaterial({
-    map: lightTexture,
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.5,
-    depthWrite: false,
-    blending: Three.AdditiveBlending,
-  });
-
-  const sprites = [];
+  // Collect all street light positions first
+  const positions = [];
 
   const keyFor = (x, y) => `${x},${y}`;
   const gridByCoords = new Map();
@@ -695,44 +586,54 @@ export function rebuildStreetLights({
 
     const px = isVertical ? x + sideOffset : x;
     const pz = isHorizontal ? z + sideOffset : z;
-
-    const coreSprite = new Three.Sprite(coreMaterial);
-    coreSprite.position.set(px, ROAD_LINE_Y + 0.02, pz);
-    coreSprite.scale.set(STREET_LIGHT_CORE_SCALE, STREET_LIGHT_CORE_SCALE, 1);
-    coreSprite.userData = {
-      baseScale: STREET_LIGHT_CORE_SCALE,
-      pulseScale: 0.12,
-      baseOpacity: 0.95,
-      pulsePeriod: STREET_LIGHT_PERIOD_SEC,
-      pulsePhaseNorm: Math.random(),
-      pulseSharpness: 2.2,
-      burstGap: 0.12,
-      pulseWidth: 0.08,
-    };
-    streetLightGroup.add(coreSprite);
-    sprites.push(coreSprite);
-
-    const haloSprite = new Three.Sprite(haloMaterial);
-    haloSprite.position.set(px, ROAD_LINE_Y + 0.02, pz);
-    haloSprite.scale.set(STREET_LIGHT_HALO_SCALE, STREET_LIGHT_HALO_SCALE, 1);
-    haloSprite.userData = {
-      baseScale: STREET_LIGHT_HALO_SCALE,
-      pulseScale: 0.22,
-      baseOpacity: 0.5,
-      pulsePeriod: STREET_LIGHT_PERIOD_SEC,
-      pulsePhaseNorm: Math.random(),
-      pulseSharpness: 2.2,
-      burstGap: 0.12,
-      pulseWidth: 0.08,
-    };
-    streetLightGroup.add(haloSprite);
-    sprites.push(haloSprite);
+    positions.push({ x: px, y: ROAD_LINE_Y + 0.02, z: pz });
   });
 
-  streetLightGroup.userData = {
-    streetSprites: sprites,
-    lightTexture,
-  };
+  if (!positions.length) {
+    streetLightGroup.userData = { lightTexture };
+    return;
+  }
+
+  // Create InstancedMesh for cores
+  const coreMesh = createBillboardInstancedMesh({
+    count: positions.length,
+    map: lightTexture,
+    color: 0xffffff,
+    blending: Three.AdditiveBlending,
+    depthWrite: false,
+    defaultOpacity: 0.95,
+    defaultScale: STREET_LIGHT_CORE_SCALE,
+  });
+  coreMesh.name = 'streetLightCoreMesh';
+  coreMesh.renderOrder = 900;
+
+  // Create InstancedMesh for halos
+  const haloMesh = createBillboardInstancedMesh({
+    count: positions.length,
+    map: lightTexture,
+    color: 0xffffff,
+    blending: Three.AdditiveBlending,
+    depthWrite: false,
+    defaultOpacity: 0.5,
+    defaultScale: STREET_LIGHT_HALO_SCALE,
+  });
+  haloMesh.name = 'streetLightHaloMesh';
+  haloMesh.renderOrder = 899;
+
+  const dummy = new Three.Object3D();
+  positions.forEach((pos, i) => {
+    dummy.position.set(pos.x, pos.y, pos.z);
+    dummy.updateMatrix();
+    coreMesh.setMatrixAt(i, dummy.matrix);
+    haloMesh.setMatrixAt(i, dummy.matrix);
+  });
+  coreMesh.instanceMatrix.needsUpdate = true;
+  haloMesh.instanceMatrix.needsUpdate = true;
+
+  streetLightGroup.add(coreMesh);
+  streetLightGroup.add(haloMesh);
+
+  streetLightGroup.userData = { lightTexture };
 }
 
 export function rebuildFloor({

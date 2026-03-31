@@ -6,13 +6,6 @@
     <appTraffic />
     <appSettings />
     <appWeather />
-    <mini-map
-      ref="miniMap"
-      :grid-array="gridArray"
-      :size="200"
-      :draw-on-scene="drawOnScene"
-      @minimap-click="onMiniMapClick"
-    />
     <div
       v-if="pointerLocked"
       class="fps-hint"
@@ -37,8 +30,8 @@ import appLayers from '@/components/layers';
 import appTraffic from '@/components/traffic/traffic.vue';
 import appSettings from '@/components/settings/settings.vue';
 import appWeather from '@/components/weather.vue';
-import miniMap from '@/components/miniMap.vue';
 import GridSetup from '@/utils/gridSetup.js';
+import { SKIP_DISPOSE_FLAG } from '@/utils/buildingDecorations';
 import {
   drawScene as drawSceneComposable,
   handleDrawOnSceneChange as handleDrawOnSceneChangeComposable,
@@ -75,7 +68,6 @@ export default {
     appTraffic,
     appSettings,
     appWeather,
-    miniMap,
   },
   data() {
     return {
@@ -109,12 +101,6 @@ export default {
       pointerLocked: false,
       tmpDirVec: markRaw(new Three.Vector3()),
       tmpLookVec: markRaw(new Three.Vector3()),
-      lastMiniMapUpdateAt: 0,
-      miniMapUpdateIntervalMs: 80,
-      miniMapMoveThresholdSq: 0.01,
-      miniMapTurnThresholdDot: 0.9992,
-      lastMiniMapPos: markRaw(new Three.Vector3(Number.NaN, Number.NaN, Number.NaN)),
-      lastMiniMapDir: markRaw(new Three.Vector3(0, 0, 0)),
       skyBackgroundTexture: null,
       skyDomeName: 'skyDome',
     };
@@ -271,12 +257,6 @@ export default {
       } catch (e) { void e; }
     },
 
-    onMiniMapClick(payload) {
-      if (!payload) return;
-      // smooth animate camera to clicked world coordinate
-      this.animateCameraTo({ x: payload.x, y: this.camera ? this.camera.position.y : undefined, z: payload.z }, { duration: 600 });
-    },
-
     renderScene() {
       this.renderer.render(this.scene, this.camera);
     },
@@ -294,16 +274,21 @@ export default {
     disposeObject(obj) {
       if (!obj || typeof obj.traverse !== 'function') return;
       try {
+        const canDispose = resource => !!(
+          resource
+          && typeof resource.dispose === 'function'
+          && !(resource.userData && resource.userData[SKIP_DISPOSE_FLAG])
+        );
         obj.traverse((child) => {
-          if (child.geometry) { try { child.geometry.dispose(); } catch (e) { void e; } }
+          if (canDispose(child.geometry)) { try { child.geometry.dispose(); } catch (e) { void e; } }
           if (child.material) {
             try {
               if (Array.isArray(child.material)) {
-                child.material.forEach((m) => { try { if (m && m.dispose) m.dispose(); } catch (e) { void e; } });
-              } else if (child.material.dispose) child.material.dispose();
+                child.material.forEach((m) => { try { if (canDispose(m)) m.dispose(); } catch (e) { void e; } });
+              } else if (canDispose(child.material)) child.material.dispose();
             } catch (e) { void e; }
           }
-          if (child.texture && child.texture.dispose) { try { child.texture.dispose(); } catch (e) { void e; } }
+          if (canDispose(child.texture)) { try { child.texture.dispose(); } catch (e) { void e; } }
         });
       } catch (e) { void e; }
     },

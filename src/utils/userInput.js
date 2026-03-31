@@ -130,11 +130,18 @@ export default class InputManager {
     const moveZ = (forward - back);
 
     // derive world-space movement vectors relative to camera yaw
-    const dir = new Three.Vector3();
+    if (!this._scratchDir) {
+      this._scratchDir = new Three.Vector3();
+      this._scratchRight = new Three.Vector3();
+      this._scratchUp = new Three.Vector3(0, 1, 0);
+      this._scratchToTarget = new Three.Vector3();
+      this._scratchMove = new Three.Vector3();
+    }
+    const dir = this._scratchDir;
     this.camera.getWorldDirection(dir); // points -Z forward
     dir.y = 0;
     dir.normalize();
-    const rightVec = new Three.Vector3().crossVectors(dir, new Three.Vector3(0, 1, 0)).normalize();
+    const rightVec = this._scratchRight.crossVectors(dir, this._scratchUp.set(0, 1, 0)).normalize();
 
     // target velocity
     const speed = this.moveSpeed * sprint;
@@ -147,7 +154,7 @@ export default class InputManager {
     }
 
     // smooth velocity: approach target using acceleration
-    const toTarget = new Three.Vector3().subVectors(this.targetVelocity, this.velocity);
+    const toTarget = this._scratchToTarget.subVectors(this.targetVelocity, this.velocity);
     const maxStep = this.acceleration * delta;
     if (toTarget.length() > 0) {
       const step = Math.min(maxStep, toTarget.length());
@@ -159,13 +166,13 @@ export default class InputManager {
     if (moveX === 0 && moveZ === 0) {
       const decel = Math.min(this.friction * delta, this.velocity.length());
       if (decel > 0) {
-        const vdir = this.velocity.clone().normalize().multiplyScalar(-decel);
-        this.velocity.add(vdir);
+        this._scratchMove.copy(this.velocity).normalize().multiplyScalar(-decel);
+        this.velocity.add(this._scratchMove);
       }
     }
 
     // update position
-    const move = this.velocity.clone().multiplyScalar(delta);
+    const move = this._scratchMove.copy(this.velocity).multiplyScalar(delta);
     this.camera.position.add(move);
   }
 }

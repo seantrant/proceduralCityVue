@@ -80,6 +80,16 @@ export function buildSceneStoreWatchers() {
         const pathsGroup = this.scene.getObjectByName && this.scene.getObjectByName('trafficPathsGroup');
         if (pathsGroup) {
           pathsGroup.visible = !!newVal;
+          // Lazy-build path lines on first enable (they're skipped when hidden)
+          if (newVal && pathsGroup.children.length === 0) {
+            try {
+              const trafficGroup = this.scene.getObjectByName('trafficGroup');
+              if (trafficGroup) {
+                const { buildTrafficPathLines } = require('@/composables/useTraffic');
+                buildTrafficPathLines(trafficGroup, this.scene, this.disposeObject, true);
+              }
+            } catch (e) { void e; }
+          }
         }
       },
     },

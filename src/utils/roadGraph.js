@@ -5,44 +5,60 @@ const ROAD_LINE_Y = 0.112;
 /**
  * Build a navigable road-network graph from the flat grid array.
  *
+ * Uses an index-based flat array for O(1) lookups instead of Map<string>.
+ *
  * @param {Array}  arrayOfGrids  – grid cells from GridSetup.createNewGrid()
  * @param {number} spacing       – world-units per cell
  * @param {number} halfExtent    – ((gridSize-1)/2)*spacing
  * @returns {Map<string, object>} nodes keyed by "x,y"
  */
 export function buildRoadGraph(arrayOfGrids, spacing, halfExtent) {
-  const nodes = new Map();
-  const keyFor = (x, y) => `${x},${y}`;
+  if (!arrayOfGrids.length) return new Map();
+
+  // Determine grid bounds for flat index
+  let maxX = 0;
+  let maxY = 0;
+  arrayOfGrids.forEach((cell) => {
+    if (cell.coords.x > maxX) maxX = cell.coords.x;
+    if (cell.coords.y > maxY) maxY = cell.coords.y;
+  });
+  const gridW = maxX + 1;
+
   const isDriveable = (cell) => !!cell && (cell.contents === 'road' || cell.contents === 'junction');
 
-  // index every cell by coord key
-  const cellMap = new Map();
-  arrayOfGrids.forEach((cell) => {
-    cellMap.set(keyFor(cell.coords.x, cell.coords.y), cell);
-  });
+  // Flat array indexed by (y * gridW + x) – null for non-driveable cells
+  const flatNodes = new Array(gridW * (maxY + 1)).fill(null);
+  const nodes = new Map();
+  const keyFor = (x, y) => `${x},${y}`;
 
-  // create a node for every driveable cell
+  // Create a node for every driveable cell
   arrayOfGrids.forEach((cell) => {
     if (!isDriveable(cell)) return;
-    const worldX = cell.coords.x * spacing - halfExtent;
-    const worldZ = cell.coords.y * spacing - halfExtent;
-    nodes.set(keyFor(cell.coords.x, cell.coords.y), {
-      key: keyFor(cell.coords.x, cell.coords.y),
-      coords: { x: cell.coords.x, y: cell.coords.y },
+    const { x, y } = cell.coords;
+    const worldX = x * spacing - halfExtent;
+    const worldZ = y * spacing - halfExtent;
+    const node = {
+      key: keyFor(x, y),
+      coords: { x, y },
       worldPos: new Three.Vector3(worldX, ROAD_LINE_Y, worldZ),
       contents: cell.contents,
-      neighbors: [], // filled below
-    });
+      neighbors: [],
+    };
+    flatNodes[y * gridW + x] = node;
+    nodes.set(node.key, node);
   });
 
-  // connect cardinal neighbours
+  // Connect cardinal neighbours using flat index for O(1) lookup
   const deltas = [[0, -1], [0, 1], [1, 0], [-1, 0]];
   nodes.forEach((node) => {
-    deltas.forEach(([dx, dy]) => {
-      const nKey = keyFor(node.coords.x + dx, node.coords.y + dy);
-      const neighbor = nodes.get(nKey);
+    const { x, y } = node.coords;
+    for (let d = 0; d < 4; d++) {
+      const nx = x + deltas[d][0];
+      const ny = y + deltas[d][1];
+      if (nx < 0 || ny < 0 || nx >= gridW || ny > maxY) continue;
+      const neighbor = flatNodes[ny * gridW + nx];
       if (neighbor) node.neighbors.push(neighbor);
-    });
+    }
   });
 
   return nodes;

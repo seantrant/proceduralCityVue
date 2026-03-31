@@ -53,11 +53,6 @@ export interface SceneViewState {
   pointerLockRequestToken: number
 }
 
-export interface MiniMapClickPayload {
-  x: number
-  z: number
-}
-
 export const defaultDrawOnScene: DrawOnScene = {
   gridLayout: true,
   buildings: true,
@@ -79,7 +74,7 @@ export const defaultCameraConfig: CameraConfig = {
 export const defaultAtmosphereConfig: AtmosphereConfig = {
   preset: 'night',
   fogEnabled: true,
-  fogDensity: 0.0007,
+  fogDensity: 0.01,
 }
 
 export const defaultInputConfig: InputConfig = {
@@ -93,11 +88,13 @@ export interface TrafficConfig {
   density: number
   minSpeed: number
   maxSpeed: number
+  maxVehicles: number
   showTrafficPaths: boolean
 }
 
 export const defaultTrafficConfig: TrafficConfig = {
   density: 100,
+  maxVehicles: 5000,
   minSpeed: 0.1,
   maxSpeed: 0.5,
   showTrafficPaths: false,

@@ -1,6 +1,7 @@
 import * as Three from 'three';
 import { ensureNamedGroup } from '@/composables/useSceneGroups';
 import { buildRoadGraph, generateVehiclePath } from '@/utils/roadGraph';
+import { createBillboardInstancedMesh } from '@/utils/billboardShader';
 
 function createVehicleTexture() {
   const size = 32;
@@ -27,6 +28,8 @@ const PATH_COLORS = [
   0x44aaff, 0xff4488, 0x88ff44, 0xffff00,
 ];
 
+const MAX_VEHICLES_DEFAULT = 5000;
+
 export function createTraffic({
   scene, arrayOfGrids, spacing, halfExtent, disposeObject, options = {},
 }) {
@@ -35,9 +38,10 @@ export function createTraffic({
     try { trafficGroup.userData.vehicleTexture.dispose(); } catch (e) { void e; }
   }
   trafficGroup.userData = {
-    vehicleSprites: [],
+    vehicleMesh: null,
     vehicleMeta: [],
     vehicleTexture: null,
+    vehicleCount: 0,
     roadGraph: null,
   };
 
@@ -47,36 +51,53 @@ export function createTraffic({
   const density = Number(options.density) || 100;
   const minSpeed = Number(options.minSpeed) || 0.1;
   const maxSpeed = Number(options.maxSpeed) || 0.5;
+  const maxVehicles = Number(options.maxVehicles) || MAX_VEHICLES_DEFAULT;
 
-  const numVehicles = Math.max(1, Math.round((roadGraph.size / 100) * density));
+  const rawCount = Math.max(1, Math.round((roadGraph.size / 100) * density));
+  const numVehicles = Math.min(rawCount, maxVehicles);
 
   const vehicleTexture = createVehicleTexture();
-  const sprites = [];
+
+  // Single InstancedMesh for all vehicles (1 draw call instead of thousands)
+  const mesh = createBillboardInstancedMesh({
+    count: numVehicles,
+    map: vehicleTexture,
+    color: 0xffffff,
+    blending: Three.NormalBlending,
+    depthWrite: false,
+    defaultOpacity: 0.95,
+    defaultScale: 0.34,
+  });
+  mesh.renderOrder = 999;
+  mesh.name = 'trafficMesh';
+  trafficGroup.add(mesh);
+
   const metas = [];
+  const dummy = new Three.Object3D();
+  const white = new Three.Color(0xffffff);
 
   for (let i = 0; i < numVehicles; i++) {
     const path = generateVehiclePath(roadGraph, 40, 80);
-    if (path.length < 2) continue;
+    if (path.length < 2) {
+      // Hide this instance far below
+      dummy.position.set(0, -1000, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, white);
+      metas.push(null);
+      continue;
+    }
 
     const waypointIndex = Math.floor(Math.random() * (path.length - 1));
     const t = Math.random();
     const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
 
-    const mat = new Three.SpriteMaterial({
-      map: vehicleTexture,
-      color: 0xffffff,
-      transparent: true,
-      depthWrite: false,
-      opacity: 0.95,
-    });
-    const sprite = new Three.Sprite(mat);
     const pos = new Three.Vector3().lerpVectors(path[waypointIndex], path[waypointIndex + 1], t);
-    sprite.position.copy(pos);
-    sprite.scale.set(0.34, 0.34, 1);
-    sprite.renderOrder = 999;
-    trafficGroup.add(sprite);
+    dummy.position.copy(pos);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+    mesh.setColorAt(i, white);
 
-    sprites.push(sprite);
     metas.push({
       path,
       waypointIndex,
@@ -85,29 +106,34 @@ export function createTraffic({
     });
   }
 
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
   trafficGroup.userData = {
-    vehicleSprites: sprites,
+    vehicleMesh: mesh,
     vehicleMeta: metas,
     vehicleTexture,
+    vehicleCount: numVehicles,
     roadGraph,
   };
-
-  // build path visualisation (hidden by default)
-  buildTrafficPathLines(trafficGroup, scene, disposeObject, options.showTrafficPaths);
 
   return trafficGroup;
 }
 
 /**
- * Create a Three.js group that renders each vehicle's path as a coloured line.
+ * Build traffic path debug lines — lazily, only when visible.
  */
 export function buildTrafficPathLines(trafficGroup, scene, disposeObject, visible) {
   const pathsGroup = ensureNamedGroup(scene, 'trafficPathsGroup', disposeObject);
   pathsGroup.visible = !!visible;
+
+  // Don't build geometry if not visible — saves memory for large grids
+  if (!visible) return;
+
   const metas = (trafficGroup && trafficGroup.userData && trafficGroup.userData.vehicleMeta) || [];
 
   metas.forEach((meta, idx) => {
-    if (!meta.path || meta.path.length < 2) return;
+    if (!meta || !meta.path || meta.path.length < 2) return;
     const color = PATH_COLORS[idx % PATH_COLORS.length];
     const points = meta.path.map((p) => new Three.Vector3(p.x, p.y + 0.015, p.z));
     const geometry = new Three.BufferGeometry().setFromPoints(points);
@@ -127,8 +153,8 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
   if (!vm || !vm.scene || !vm.camera) return;
   const trafficGroup = cachedTrafficGroup || (vm.scene.getObjectByName && vm.scene.getObjectByName('trafficGroup'));
   if (!trafficGroup || !trafficGroup.visible || !trafficGroup.userData) return;
-  const { vehicleSprites = [], vehicleMeta = [] } = trafficGroup.userData;
-  if (!vehicleMeta.length) return;
+  const { vehicleMesh, vehicleMeta = [], vehicleCount = 0 } = trafficGroup.userData;
+  if (!vehicleMesh || !vehicleCount) return;
 
   const deltaMs = now - (vm._trafficLastTime || now);
   const delta = Math.min(0.05, Math.max(0, deltaMs / 1000));
@@ -140,6 +166,10 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
     heading: new Three.Vector3(),
     fallbackPerp: new Three.Vector3(),
     offsetVec: new Three.Vector3(),
+    dummy: new Three.Object3D(),
+    colorWhite: new Three.Color(0xffffff),
+    colorRed: new Three.Color(0xff2222),
+    tmpColor: new Three.Color(),
   };
   trafficGroup.userData.__scratch = scratch;
 
@@ -148,6 +178,7 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
 
   for (let i = 0; i < vehicleMeta.length; i++) {
     const meta = vehicleMeta[i];
+    if (!meta) continue;
     const { path } = meta;
     if (!path || path.length < 2) continue;
 
@@ -175,8 +206,6 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
     const segB = path[bIdx];
 
     const pos = scratch.pos.lerpVectors(segA, segB, Math.min(meta.t, 1));
-    const sprite = vehicleSprites[i];
-    if (!sprite) continue;
 
     // heading for lane offset & headlight colour
     const heading = scratch.heading.subVectors(segB, segA);
@@ -190,13 +219,18 @@ export function stepTrafficFrame(vm, now, cachedTrafficGroup = null) {
     // approaching or receding relative to camera
     const dot = heading.dot(scratch.camDir);
     const towards = dot < 0;
-    const color = towards ? 0xffffff : 0xff2222;
-    if (sprite.material && sprite.material.color) sprite.material.color.setHex(color);
+    scratch.tmpColor.copy(towards ? scratch.colorWhite : scratch.colorRed);
+    vehicleMesh.setColorAt(i, scratch.tmpColor);
 
     // lane offset
     const laneOffset = 0.14;
     const offsetVec = scratch.offsetVec.copy(perp).multiplyScalar(towards ? -laneOffset : laneOffset);
 
-    sprite.position.copy(pos).add(offsetVec);
+    scratch.dummy.position.copy(pos).add(offsetVec);
+    scratch.dummy.updateMatrix();
+    vehicleMesh.setMatrixAt(i, scratch.dummy.matrix);
   }
+
+  vehicleMesh.instanceMatrix.needsUpdate = true;
+  if (vehicleMesh.instanceColor) vehicleMesh.instanceColor.needsUpdate = true;
 }

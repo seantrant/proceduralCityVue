@@ -35,16 +35,17 @@ export function ensureSkyDome(vm, topHex, bottomHex) {
   const existing = vm.scene.getObjectByName && vm.scene.getObjectByName(vm.skyDomeName);
   if (existing) return;
 
-  const geometry = new Three.SphereGeometry(20000, 32, 16);
+  // Scale sky dome to sit just inside the camera far plane
+  const domeRadius = vm.camera && vm.camera.far ? vm.camera.far * 0.9 : 2000;
+  const geometry = new Three.SphereGeometry(domeRadius, 32, 16);
   const topColor = new Three.Color(topHex);
   const bottomColor = new Three.Color(bottomHex);
   const position = geometry.getAttribute('position');
   const colors = [];
   const tmpColor = new Three.Color();
-  const radius = 20000;
 
   for (let idx = 0; idx < position.count; idx += 1) {
-    const normalizedY = (position.getY(idx) / radius + 1) * 0.5;
+    const normalizedY = (position.getY(idx) / domeRadius + 1) * 0.5;
     const blend = Math.max(0, Math.min(1, normalizedY));
     tmpColor.copy(bottomColor).lerp(topColor, blend);
     colors.push(tmpColor.r, tmpColor.g, tmpColor.b);

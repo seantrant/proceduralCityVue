@@ -71,59 +71,61 @@ export function animateSceneFrame(vm, now, options = {}) {
 
   const roofLightGroup = getCachedSceneObject('roofLightGroup', 'roofLightGroup');
   if (roofLightGroup && roofLightGroup.visible && roofLightGroup.userData) {
-    const sprites = roofLightGroup.userData.beaconSprites || [];
-    const nowSec = (now || performance.now()) / 1000;
-    const normalizeUnit = (value) => {
-      const normalized = value % 1;
-      return normalized < 0 ? normalized + 1 : normalized;
-    };
-    const wrappedDistance = (a, b) => {
-      const diff = Math.abs(a - b);
-      return Math.min(diff, 1 - diff);
-    };
-    sprites.forEach((sprite) => {
-      if (!sprite || !sprite.userData || !sprite.material) return;
-      const pulsePeriod = Math.max(0.2, Number(sprite.userData.pulsePeriod) || 2.4);
-      const pulsePhaseNormRaw = Number(sprite.userData.pulsePhaseNorm);
-      const legacyPulsePhase = Number(sprite.userData.pulsePhase);
-      const pulsePhaseNorm = Number.isFinite(pulsePhaseNormRaw)
-        ? normalizeUnit(pulsePhaseNormRaw)
-        : normalizeUnit((Number.isFinite(legacyPulsePhase) ? legacyPulsePhase : 0) / (Math.PI * 2));
-      const pulseSharpness = Math.max(1, Number(sprite.userData.pulseSharpness) || 2);
-      const burstGap = Math.max(0, Math.min(1, Number(sprite.userData.burstGap) || 0.2));
-      const pulseWidth = Math.max(0.001, Number(sprite.userData.pulseWidth) || 0.1);
-      const cyclePos = normalizeUnit((nowSec / pulsePeriod) + pulsePhaseNorm);
-      const firstPulseCenter = 0.18;
-      const secondPulseCenter = normalizeUnit(firstPulseCenter + burstGap);
-      const rawPulseA = Math.max(0, 1 - (wrappedDistance(cyclePos, firstPulseCenter) / pulseWidth));
-      const rawPulseB = Math.max(0, 1 - (wrappedDistance(cyclePos, secondPulseCenter) / pulseWidth));
-      const shapedPulseA = Math.pow(rawPulseA, pulseSharpness);
-      const shapedPulseB = Math.pow(rawPulseB, pulseSharpness);
-      const intensity = Math.max(shapedPulseA, shapedPulseB);
-      const pulseMin = Math.max(0, Math.min(1, Number(sprite.userData.pulseMin) || 0));
-      const pulse = pulseMin + ((1 - pulseMin) * intensity);
+    const ud = roofLightGroup.userData;
+    const count = ud.beaconCount || 0;
+    const coreMesh = ud.coreInstancedMesh;
+    const haloMesh = ud.haloInstancedMesh;
+    if (count > 0 && coreMesh && haloMesh) {
+      const coreOpacities = coreMesh.geometry.getAttribute('aOpacity');
+      const coreScales = coreMesh.geometry.getAttribute('aScale');
+      const haloOpacities = haloMesh.geometry.getAttribute('aOpacity');
+      const haloScales = haloMesh.geometry.getAttribute('aScale');
+      const nowSec = (now || performance.now()) / 1000;
 
-      const baseOpacity = Math.max(0, Number(sprite.userData.baseOpacity) || 0.5);
-      sprite.material.opacity = baseOpacity * pulse;
+      const normalizeUnit = (value) => {
+        const normalized = value % 1;
+        return normalized < 0 ? normalized + 1 : normalized;
+      };
+      const wrappedDistance = (a, b) => {
+        const diff = Math.abs(a - b);
+        return Math.min(diff, 1 - diff);
+      };
 
-      const baseScale = Number(sprite.userData.baseScale) || 0.1;
-      const pulseScale = Number(sprite.userData.pulseScale) || 0;
-      const nextScale = baseScale * (1 + pulseScale * pulse);
-      sprite.scale.set(nextScale, nextScale, 1);
-    });
+      for (let i = 0; i < count; i++) {
+        const pulsePeriod = Math.max(0.2, ud.pulsePeriods[i]);
+        const pulsePhaseNorm = normalizeUnit(ud.pulsePhaseNorms[i]);
+        const pulseSharpness = Math.max(1, ud.pulseSharpnesses[i]);
+        const burstGap = ud.burstGaps[i];
+        const pulseWidth = Math.max(0.001, ud.pulseWidths[i]);
+        const pulseMin = ud.pulseMins[i];
+
+        const cyclePos = normalizeUnit((nowSec / pulsePeriod) + pulsePhaseNorm);
+        const firstPulseCenter = 0.18;
+        const secondPulseCenter = normalizeUnit(firstPulseCenter + burstGap);
+        const rawPulseA = Math.max(0, 1 - (wrappedDistance(cyclePos, firstPulseCenter) / pulseWidth));
+        const rawPulseB = Math.max(0, 1 - (wrappedDistance(cyclePos, secondPulseCenter) / pulseWidth));
+        const shapedPulseA = Math.pow(rawPulseA, pulseSharpness);
+        const shapedPulseB = Math.pow(rawPulseB, pulseSharpness);
+        const intensity = Math.max(shapedPulseA, shapedPulseB);
+        const pulse = pulseMin + ((1 - pulseMin) * intensity);
+
+        // Core: baseOpacity=0.98, baseScale=CORE_SCALE, pulseScale=0.14
+        coreOpacities.array[i] = 0.98 * pulse;
+        coreScales.array[i] = 0.11 * (1 + 0.14 * pulse);
+
+        // Halo: baseOpacity=0.55, baseScale=HALO_SCALE, pulseScale=0.24
+        haloOpacities.array[i] = 0.55 * pulse;
+        haloScales.array[i] = 0.28 * (1 + 0.24 * pulse);
+      }
+
+      coreOpacities.needsUpdate = true;
+      coreScales.needsUpdate = true;
+      haloOpacities.needsUpdate = true;
+      haloScales.needsUpdate = true;
+    }
   }
 
-  const streetLightGroup = getCachedSceneObject('streetLightGroup', 'streetLightGroup');
-  if (streetLightGroup && streetLightGroup.visible && streetLightGroup.userData) {
-    const sprites = streetLightGroup.userData.streetSprites || [];
-    sprites.forEach((sprite) => {
-      if (!sprite || !sprite.userData || !sprite.material) return;
-      const baseOpacity = Math.max(0, Number(sprite.userData.baseOpacity) || 0.95);
-      sprite.material.opacity = baseOpacity;
-      const baseScale = Number(sprite.userData.baseScale) || 0.1;
-      sprite.scale.set(baseScale, baseScale, 1);
-    });
-  }
+  // Street lights are now InstancedMesh with static opacity/scale — no per-frame update needed.
 
   const trafficGroup = getCachedSceneObject('trafficGroup', 'trafficGroup');
   try {
@@ -136,31 +138,6 @@ export function animateSceneFrame(vm, now, options = {}) {
   } catch (e) { void e; }
 
   vm.renderer.render(vm.scene, vm.camera);
-
-  try {
-    vm.camera.getWorldDirection(vm.tmpDirVec);
-    const elapsedSinceMiniMap = now - (vm.lastMiniMapUpdateAt || 0);
-    const movedSq = vm.lastMiniMapPos.distanceToSquared(vm.camera.position);
-    const turnDot = vm.lastMiniMapDir.dot(vm.tmpDirVec);
-    const shouldUpdateMiniMap = !Number.isFinite(movedSq)
-      || elapsedSinceMiniMap >= vm.miniMapUpdateIntervalMs
-      || movedSq >= vm.miniMapMoveThresholdSq
-      || turnDot <= vm.miniMapTurnThresholdDot;
-
-    if (
-      shouldUpdateMiniMap
-      && vm.$refs
-      && vm.$refs.miniMap
-      && typeof vm.$refs.miniMap.updateCamera === 'function'
-    ) {
-      vm.$refs.miniMap.updateCamera(vm.camera.position, vm.tmpDirVec);
-      vm.lastMiniMapUpdateAt = now;
-      vm.lastMiniMapPos.copy(vm.camera.position);
-      vm.lastMiniMapDir.copy(vm.tmpDirVec);
-    }
-  } catch (e) {
-    void e;
-  }
 
   vm._rafId = requestAnimationFrame(vm._animate);
 }
